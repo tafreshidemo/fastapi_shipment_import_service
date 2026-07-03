@@ -1,0 +1,15 @@
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+*.egg-info/
+.idea/
+.vscode/
+*.swp
+.env
+data/uploads/
+tmp/uploads/
+*.sqlite3
+*.db
