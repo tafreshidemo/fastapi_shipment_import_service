@@ -12,10 +12,10 @@ from app.api.app import create_app
 from app.core.settings import Settings, get_settings
 from app.db.session import build_session_factory
 from tests.support.docker_runtime import (
-    DockerRuntimeStack,
     TEST_API_HOST_PORT,
     TEST_POSTGRES_HOST_PORT,
     TEST_RABBITMQ_HOST_PORT,
+    DockerRuntimeStack,
     docker_compose,
     ping_worker,
     wait_for_service_health,

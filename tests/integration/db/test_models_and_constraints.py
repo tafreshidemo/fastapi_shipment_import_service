@@ -18,7 +18,6 @@ from app.db.models.import_job import ImportJob
 from app.db.models.shipment import Shipment
 from tests.support.postgres_database import run_alembic
 
-
 EXPECTED_TABLES = {
     "import_jobs",
     "import_dispatch_outbox",

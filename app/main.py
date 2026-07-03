@@ -1,3 +1,22 @@
-from app.api.app import create_app
+from fastapi import FastAPI
+
+from app.api.errors import register_exception_handlers
+from app.api.v1.health import router as health_router
+from app.api.v1.imports import router as imports_router
+from app.core.logging import configure_logging
+from app.core.settings import get_settings
+
+
+def create_app() -> FastAPI:
+    """Create the FastAPI application."""
+    settings = get_settings()
+    configure_logging(settings.log_level)
+
+    application = FastAPI(title=settings.app_name)
+    application.include_router(imports_router, prefix="/api/v1")
+    application.include_router(health_router, prefix="/api/v1")
+    register_exception_handlers(application)
+    return application
+
 
 app = create_app()

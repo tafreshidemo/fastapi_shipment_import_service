@@ -20,6 +20,10 @@ class StoredFile:
     sha256_hex: str
 
 
+class UploadTooLargeError(ValueError):
+    """Raised when an upload exceeds the configured storage limit."""
+
+
 class LocalFileStorage:
     """Stream uploads to local storage without loading the full file into memory."""
 
@@ -35,6 +39,7 @@ class LocalFileStorage:
         original_file_name: str,
     ) -> StoredFile:
         await aiofiles.os.makedirs(self._upload_dir, exist_ok=True)
+        original_file_name = Path(original_file_name).name
         suffix = Path(original_file_name).suffix.lower()
         file_token = uuid4().hex
         temp_path = self._upload_dir / f"{file_token}.tmp"
@@ -51,7 +56,9 @@ class LocalFileStorage:
 
                     total_size += len(chunk)
                     if total_size > self._max_size_bytes:
-                        raise ValueError("Uploaded file exceeds the maximum allowed size.")
+                        raise UploadTooLargeError(
+                            "Uploaded file exceeds the maximum allowed size."
+                        )
 
                     digest.update(chunk)
                     await handle.write(chunk)
