@@ -31,9 +31,7 @@ class Settings(BaseSettings):
     outbox_max_attempts: int = 5
     outbox_stale_timeout_seconds: int = 60
     outbox_poll_interval_seconds: int = 1
-    outbox_retry_delays_seconds: Annotated[tuple[int, ...], NoDecode] = Field(
-        default=(2, 4, 8, 16)
-    )
+    outbox_retry_delays_seconds: Annotated[tuple[int, ...], NoDecode] = Field(default=(2, 4, 8, 16))
     import_max_attempts: int = 3
     processing_stale_timeout_seconds: int = 300
     watchdog_interval_seconds: int = 60

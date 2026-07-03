@@ -7,7 +7,9 @@ from app.db import session as session_module
 
 
 def test_session_factory_uses_sync_session_configuration() -> None:
-    settings = Settings(database_url="postgresql+psycopg://postgres:postgres@127.0.0.1:54329/import_service")
+    settings = Settings(
+        database_url=("postgresql+psycopg://postgres:postgres@127.0.0.1:54329/import_service")
+    )
 
     session_factory = session_module.build_session_factory(settings)
 
@@ -31,7 +33,10 @@ def test_async_session_is_not_defined() -> None:
         ("db_max_overflow", -1),
     ],
 )
-def test_settings_reject_invalid_runtime_integers(field_name: str, value: int) -> None:
+def test_settings_reject_invalid_runtime_integers(
+    field_name: str,
+    value: int,
+) -> None:
     with pytest.raises(ValidationError):
         Settings(**{field_name: value})
 
@@ -46,7 +51,13 @@ def test_settings_reject_invalid_retry_delay_configuration() -> None:
 
 def test_settings_reject_invalid_runtime_relationships() -> None:
     with pytest.raises(ValidationError):
-        Settings(upload_read_chunk_size_bytes=1024, max_upload_size_bytes=512)
+        Settings(
+            upload_read_chunk_size_bytes=1024,
+            max_upload_size_bytes=512,
+        )
 
     with pytest.raises(ValidationError):
-        Settings(default_page_size=50, max_page_size=20)
+        Settings(
+            default_page_size=50,
+            max_page_size=20,
+        )

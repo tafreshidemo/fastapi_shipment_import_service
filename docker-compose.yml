@@ -10,8 +10,12 @@ services:
       interval: 5s
       timeout: 5s
       retries: 20
+      start_period: 5s
     ports:
-      - "54329:5432"
+      - "${POSTGRES_HOST_PORT:-54329}:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    stop_grace_period: 15s
 
   rabbitmq:
     image: rabbitmq:3.13-management
@@ -23,21 +27,34 @@ services:
       interval: 5s
       timeout: 5s
       retries: 20
+      start_period: 10s
     ports:
-      - "56729:5672"
+      - "${RABBITMQ_HOST_PORT:-56729}:5672"
+      - "${RABBITMQ_MANAGEMENT_HOST_PORT:-15629}:15672"
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq
+    stop_grace_period: 20s
 
   migrate:
-    build: .
-    command: alembic upgrade head
+    image: fastapi_technical_assessment-app
+    build:
+      context: .
+      dockerfile: Dockerfile
+    command: ["/app/scripts/run_migrations.sh"]
     env_file:
       - .env.example
+    environment:
+      DATABASE_URL: postgresql+psycopg://postgres:postgres@postgres:5432/import_service
     depends_on:
       postgres:
         condition: service_healthy
     restart: "no"
 
   api:
-    build: .
+    image: fastapi_technical_assessment-app
+    build:
+      context: .
+      dockerfile: Dockerfile
     command:
       [
         "uvicorn",
@@ -51,13 +68,16 @@ services:
       ]
     env_file:
       - .env.example
+    environment:
+      DATABASE_URL: postgresql+psycopg://postgres:postgres@postgres:5432/import_service
+      RABBITMQ_URL: amqp://import_user:import_password@rabbitmq:5672//
     depends_on:
       migrate:
         condition: service_completed_successfully
       rabbitmq:
         condition: service_healthy
     ports:
-      - "8000:8000"
+      - "${API_HOST_PORT:-8000}:8000"
     healthcheck:
       test:
         [
@@ -69,9 +89,15 @@ services:
       interval: 5s
       timeout: 5s
       retries: 20
+      start_period: 10s
+    restart: unless-stopped
+    stop_grace_period: 20s
 
   worker:
-    build: .
+    image: fastapi_technical_assessment-app
+    build:
+      context: .
+      dockerfile: Dockerfile
     command:
       [
         "celery",
@@ -83,6 +109,9 @@ services:
       ]
     env_file:
       - .env.example
+    environment:
+      DATABASE_URL: postgresql+psycopg://postgres:postgres@postgres:5432/import_service
+      RABBITMQ_URL: amqp://import_user:import_password@rabbitmq:5672//
     depends_on:
       migrate:
         condition: service_completed_successfully
@@ -97,3 +126,10 @@ services:
       interval: 10s
       timeout: 10s
       retries: 12
+      start_period: 20s
+    restart: unless-stopped
+    stop_grace_period: 30s
+
+volumes:
+  postgres_data:
+  rabbitmq_data:

@@ -92,6 +92,7 @@ async def test_concurrent_boundary_calls_use_distinct_sessions(
     transport = ASGITransport(app=app)
 
     async with AsyncClient(transport=transport, base_url="http://testserver") as client:
+
         async def make_request() -> dict[str, object]:
             response = await client.get("/boundary")
             response.raise_for_status()
@@ -113,9 +114,7 @@ async def test_concurrent_boundary_calls_use_distinct_sessions(
     assert second["query_result"] == 1
     assert first["created_thread_name"] == first["used_thread_name"] == first["closed_thread_name"]
     assert (
-        second["created_thread_name"]
-        == second["used_thread_name"]
-        == second["closed_thread_name"]
+        second["created_thread_name"] == second["used_thread_name"] == second["closed_thread_name"]
     )
     assert first["created_thread_name"] != first["event_loop_thread_name"]
     assert second["created_thread_name"] != second["event_loop_thread_name"]

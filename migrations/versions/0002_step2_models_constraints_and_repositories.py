@@ -1,0 +1,425 @@
+"""step2 models constraints and repositories"""
+
+from __future__ import annotations
+
+import sqlalchemy as sa
+from alembic import op
+from sqlalchemy.dialects import postgresql
+
+# revision identifiers, used by Alembic.
+revision = "0002_step2_models"
+down_revision = "0001_step1_runtime_baseline"
+branch_labels = None
+depends_on = None
+
+
+def upgrade() -> None:
+    op.create_table(
+        "import_jobs",
+        sa.Column(
+            "id",
+            postgresql.UUID(as_uuid=True),
+            primary_key=True,
+            nullable=False,
+        ),
+        sa.Column(
+            "status",
+            sa.String(length=32),
+            nullable=False,
+            server_default=sa.text("'PENDING'"),
+        ),
+        sa.Column(
+            "original_file_name",
+            sa.String(length=255),
+            nullable=False,
+        ),
+        sa.Column(
+            "stored_file_path",
+            sa.String(length=1024),
+            nullable=False,
+        ),
+        sa.Column(
+            "file_size_bytes",
+            sa.Integer(),
+            nullable=False,
+        ),
+        sa.Column(
+            "content_type",
+            sa.String(length=255),
+            nullable=True,
+        ),
+        sa.Column(
+            "idempotency_key",
+            sa.String(length=255),
+            nullable=True,
+        ),
+        sa.Column(
+            "idempotency_fingerprint",
+            sa.String(length=64),
+            nullable=False,
+        ),
+        sa.Column(
+            "total_rows",
+            sa.Integer(),
+            nullable=False,
+            server_default=sa.text("0"),
+        ),
+        sa.Column(
+            "processed_rows",
+            sa.Integer(),
+            nullable=False,
+            server_default=sa.text("0"),
+        ),
+        sa.Column(
+            "success_count",
+            sa.Integer(),
+            nullable=False,
+            server_default=sa.text("0"),
+        ),
+        sa.Column(
+            "failed_count",
+            sa.Integer(),
+            nullable=False,
+            server_default=sa.text("0"),
+        ),
+        sa.Column(
+            "attempt_count",
+            sa.Integer(),
+            nullable=False,
+            server_default=sa.text("0"),
+        ),
+        sa.Column(
+            "max_attempts",
+            sa.Integer(),
+            nullable=False,
+        ),
+        sa.Column(
+            "processing_token",
+            postgresql.UUID(as_uuid=True),
+            nullable=True,
+        ),
+        sa.Column(
+            "locked_by_worker",
+            sa.String(length=255),
+            nullable=True,
+        ),
+        sa.Column(
+            "started_at",
+            sa.DateTime(timezone=True),
+            nullable=True,
+        ),
+        sa.Column(
+            "last_heartbeat_at",
+            sa.DateTime(timezone=True),
+            nullable=True,
+        ),
+        sa.Column(
+            "finished_at",
+            sa.DateTime(timezone=True),
+            nullable=True,
+        ),
+        sa.Column(
+            "last_failure_reason",
+            sa.Text(),
+            nullable=True,
+        ),
+        sa.Column(
+            "failure_reason",
+            sa.Text(),
+            nullable=True,
+        ),
+        sa.Column(
+            "last_requeued_at",
+            sa.DateTime(timezone=True),
+            nullable=True,
+        ),
+        sa.Column(
+            "created_at",
+            sa.DateTime(timezone=True),
+            nullable=False,
+            server_default=sa.text("now()"),
+        ),
+        sa.Column(
+            "updated_at",
+            sa.DateTime(timezone=True),
+            nullable=False,
+            server_default=sa.text("now()"),
+        ),
+        sa.CheckConstraint(
+            "status IN ('PENDING', 'PROCESSING', 'COMPLETED', 'FAILED')",
+            name="ck_import_jobs_status",
+        ),
+        sa.CheckConstraint(
+            "(status = 'FAILED' AND failure_reason IS NOT NULL) OR "
+            "(status <> 'FAILED' AND failure_reason IS NULL)",
+            name="ck_import_jobs_failure_reason_terminal",
+        ),
+        sa.UniqueConstraint(
+            "idempotency_key",
+            name="uq_import_jobs_idempotency_key",
+        ),
+    )
+
+    op.create_index(
+        "ix_import_jobs_status",
+        "import_jobs",
+        ["status"],
+    )
+    op.create_index(
+        "ix_import_jobs_status_last_heartbeat_at",
+        "import_jobs",
+        ["status", "last_heartbeat_at"],
+    )
+
+    op.create_table(
+        "import_dispatch_outbox",
+        sa.Column(
+            "id",
+            postgresql.UUID(as_uuid=True),
+            primary_key=True,
+            nullable=False,
+        ),
+        sa.Column(
+            "import_id",
+            postgresql.UUID(as_uuid=True),
+            sa.ForeignKey(
+                "import_jobs.id",
+                ondelete="CASCADE",
+            ),
+            nullable=False,
+        ),
+        sa.Column(
+            "status",
+            sa.String(length=32),
+            nullable=False,
+            server_default=sa.text("'PENDING'"),
+        ),
+        sa.Column(
+            "attempt_count",
+            sa.Integer(),
+            nullable=False,
+            server_default=sa.text("0"),
+        ),
+        sa.Column(
+            "available_at",
+            sa.DateTime(timezone=True),
+            nullable=False,
+            server_default=sa.text("now()"),
+        ),
+        sa.Column(
+            "claimed_at",
+            sa.DateTime(timezone=True),
+            nullable=True,
+        ),
+        sa.Column(
+            "claim_token",
+            postgresql.UUID(as_uuid=True),
+            nullable=True,
+        ),
+        sa.Column(
+            "published_at",
+            sa.DateTime(timezone=True),
+            nullable=True,
+        ),
+        sa.Column(
+            "last_error",
+            sa.Text(),
+            nullable=True,
+        ),
+        sa.Column(
+            "created_at",
+            sa.DateTime(timezone=True),
+            nullable=False,
+            server_default=sa.text("now()"),
+        ),
+        sa.Column(
+            "updated_at",
+            sa.DateTime(timezone=True),
+            nullable=False,
+            server_default=sa.text("now()"),
+        ),
+        sa.CheckConstraint(
+            "status IN ('PENDING', 'PROCESSING', 'PUBLISHED', 'FAILED')",
+            name="ck_import_dispatch_outbox_status",
+        ),
+    )
+
+    op.create_index(
+        "ix_import_dispatch_outbox_status_available_at",
+        "import_dispatch_outbox",
+        ["status", "available_at"],
+    )
+    op.create_index(
+        "ix_import_dispatch_outbox_status_claimed_at",
+        "import_dispatch_outbox",
+        ["status", "claimed_at"],
+    )
+
+    op.create_table(
+        "shipments",
+        sa.Column(
+            "id",
+            postgresql.UUID(as_uuid=True),
+            primary_key=True,
+            nullable=False,
+        ),
+        sa.Column(
+            "import_id",
+            postgresql.UUID(as_uuid=True),
+            sa.ForeignKey(
+                "import_jobs.id",
+                ondelete="CASCADE",
+            ),
+            nullable=False,
+        ),
+        sa.Column(
+            "shipment_code",
+            sa.String(length=128),
+            nullable=False,
+        ),
+        sa.Column(
+            "customer_name",
+            sa.String(length=150),
+            nullable=False,
+        ),
+        sa.Column(
+            "origin_city",
+            sa.String(length=255),
+            nullable=False,
+        ),
+        sa.Column(
+            "destination_city",
+            sa.String(length=255),
+            nullable=False,
+        ),
+        sa.Column(
+            "weight_kg",
+            sa.Numeric(12, 3),
+            nullable=False,
+        ),
+        sa.Column(
+            "price",
+            sa.Numeric(18, 2),
+            nullable=False,
+        ),
+        sa.Column(
+            "status",
+            sa.String(length=32),
+            nullable=False,
+            server_default=sa.text("'PENDING'"),
+        ),
+        sa.Column(
+            "delivery_date",
+            sa.Date(),
+            nullable=True,
+        ),
+        sa.Column(
+            "created_at",
+            sa.DateTime(timezone=True),
+            nullable=False,
+            server_default=sa.text("now()"),
+        ),
+        sa.Column(
+            "updated_at",
+            sa.DateTime(timezone=True),
+            nullable=False,
+            server_default=sa.text("now()"),
+        ),
+        sa.CheckConstraint(
+            "status IN ('PENDING', 'IN_TRANSIT', 'DELIVERED', 'CANCELED')",
+            name="ck_shipments_status",
+        ),
+        sa.CheckConstraint(
+            "weight_kg > 0",
+            name="ck_shipments_weight_kg_positive",
+        ),
+        sa.CheckConstraint(
+            "price >= 0",
+            name="ck_shipments_price_non_negative",
+        ),
+        sa.UniqueConstraint(
+            "shipment_code",
+            name="uq_shipments_shipment_code",
+        ),
+    )
+
+    op.create_table(
+        "import_errors",
+        sa.Column(
+            "id",
+            postgresql.UUID(as_uuid=True),
+            primary_key=True,
+            nullable=False,
+        ),
+        sa.Column(
+            "import_id",
+            postgresql.UUID(as_uuid=True),
+            sa.ForeignKey(
+                "import_jobs.id",
+                ondelete="CASCADE",
+            ),
+            nullable=False,
+        ),
+        sa.Column(
+            "row_number",
+            sa.Integer(),
+            nullable=False,
+        ),
+        sa.Column(
+            "field",
+            sa.String(length=255),
+            nullable=False,
+        ),
+        sa.Column(
+            "error",
+            sa.Text(),
+            nullable=False,
+        ),
+        sa.Column(
+            "raw_data",
+            postgresql.JSONB(astext_type=sa.Text()),
+            nullable=False,
+        ),
+        sa.Column(
+            "created_at",
+            sa.DateTime(timezone=True),
+            nullable=False,
+            server_default=sa.text("now()"),
+        ),
+    )
+
+    op.create_index(
+        "ix_import_errors_import_id_row_number_id",
+        "import_errors",
+        ["import_id", "row_number", "id"],
+    )
+
+
+def downgrade() -> None:
+    op.drop_index(
+        "ix_import_errors_import_id_row_number_id",
+        table_name="import_errors",
+    )
+    op.drop_table("import_errors")
+
+    op.drop_table("shipments")
+
+    op.drop_index(
+        "ix_import_dispatch_outbox_status_claimed_at",
+        table_name="import_dispatch_outbox",
+    )
+    op.drop_index(
+        "ix_import_dispatch_outbox_status_available_at",
+        table_name="import_dispatch_outbox",
+    )
+    op.drop_table("import_dispatch_outbox")
+
+    op.drop_index(
+        "ix_import_jobs_status_last_heartbeat_at",
+        table_name="import_jobs",
+    )
+    op.drop_index(
+        "ix_import_jobs_status",
+        table_name="import_jobs",
+    )
+    op.drop_table("import_jobs")
