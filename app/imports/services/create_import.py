@@ -9,7 +9,7 @@ from app.core.settings import Settings
 from app.db.models.import_dispatch_outbox import ImportDispatchOutbox
 from app.db.models.import_job import ImportJob
 from app.imports.dto import ImportCreatedResult
-from app.imports.repositories.import_repository import ImportRepository
+from app.imports.repositories.import_repository import ImportRepository, ImportSnapshot
 
 
 class IdempotencyConflictError(Exception):
@@ -18,6 +18,14 @@ class IdempotencyConflictError(Exception):
 
 class DatabaseWriteError(Exception):
     """Raised when the import or dispatch transaction cannot be committed."""
+
+
+class DuplicateImportError(Exception):
+    """Raised when an identical file was already submitted."""
+
+    def __init__(self, existing: ImportSnapshot) -> None:
+        super().__init__("An identical file was already submitted.")
+        self.existing = existing
 
 
 @dataclass(frozen=True, slots=True)
@@ -44,6 +52,8 @@ class CreateImportService:
         with self._session_factory() as session:
             import_repository = ImportRepository(session)
 
+            import_repository.acquire_fingerprint_lock(idempotency_fingerprint)
+
             if idempotency_key is not None:
                 existing = import_repository.get_snapshot_by_idempotency_key(idempotency_key)
                 if existing is not None:
@@ -59,6 +69,10 @@ class CreateImportService:
                         ),
                         created=False,
                     )
+
+            existing = import_repository.get_snapshot_by_fingerprint(idempotency_fingerprint)
+            if existing is not None:
+                raise DuplicateImportError(existing)
 
             import_job = ImportJob(
                 status="PENDING",

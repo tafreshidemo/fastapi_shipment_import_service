@@ -116,3 +116,47 @@ async def test_same_idempotency_key_and_different_fingerprint_returns_conflict(
     with step2_session_factory() as session:
         assert session.scalar(sa.select(sa.func.count()).select_from(ImportJob)) == 1
         assert session.scalar(sa.select(sa.func.count()).select_from(ImportDispatchOutbox)) == 1
+
+
+@pytest.mark.asyncio
+async def test_identical_upload_without_idempotency_key_returns_duplicate_feedback(
+    step2_session_factory: sessionmaker,
+    tmp_path: Path,
+) -> None:
+    upload_dir = tmp_path / "uploads"
+    app = _build_app(step2_session_factory, upload_dir)
+    payload = _xlsx_bytes("manual-repeat")
+
+    async with AsyncClient(
+        transport=ASGITransport(app=app),
+        base_url="http://testserver",
+    ) as client:
+        first_response = await client.post(
+            "/api/v1/imports",
+            files={"file": ("imports.xlsx", payload, "application/octet-stream")},
+        )
+        second_response = await client.post(
+            "/api/v1/imports",
+            files={"file": ("imports.xlsx", payload, "application/octet-stream")},
+        )
+
+    assert first_response.status_code == 202
+    assert second_response.status_code == 409
+
+    first_body = first_response.json()
+    assert second_response.json() == {
+        "error": {
+            "code": "DUPLICATE_IMPORT",
+            "message": "An identical file was already submitted.",
+            "details": {
+                "import_id": first_body["import_id"],
+                "status": "PENDING",
+                "created_at": first_body["created_at"],
+            },
+        }
+    }
+    assert len(list(upload_dir.iterdir())) == 1
+
+    with step2_session_factory() as session:
+        assert session.scalar(sa.select(sa.func.count()).select_from(ImportJob)) == 1
+        assert session.scalar(sa.select(sa.func.count()).select_from(ImportDispatchOutbox)) == 1

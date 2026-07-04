@@ -17,6 +17,7 @@ from app.db.session import get_session_factory
 from app.imports.services.create_import import (
     CreateImportService,
     DatabaseWriteError,
+    DuplicateImportError,
     IdempotencyConflictError,
 )
 from app.imports.services.get_import_status import GetImportStatusService, ImportNotFoundError
@@ -140,6 +141,19 @@ async def create_import(
             "IDEMPOTENCY_CONFLICT",
             "Idempotency-Key already exists for a different upload.",
             status_code=HTTPStatus.CONFLICT,
+        ) from exc
+    except DuplicateImportError as exc:
+        if stored_file is not None:
+            await storage.delete_if_exists(Path(stored_file.stored_file_path))
+        raise ApiError(
+            "DUPLICATE_IMPORT",
+            "An identical file was already submitted.",
+            status_code=HTTPStatus.CONFLICT,
+            details={
+                "import_id": str(exc.existing.import_id),
+                "status": exc.existing.status,
+                "created_at": exc.existing.created_at.isoformat().replace("+00:00", "Z"),
+            },
         ) from exc
     except DatabaseWriteError as exc:
         if stored_file is not None:

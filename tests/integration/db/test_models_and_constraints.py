@@ -18,6 +18,9 @@ from app.db.models.import_job import ImportJob
 from app.db.models.shipment import Shipment
 from tests.support.postgres_database import run_alembic
 
+STEP2_REVISION = "0002_step2_models"
+
+
 EXPECTED_TABLES = {
     "import_jobs",
     "import_dispatch_outbox",
@@ -200,7 +203,7 @@ def test_step2_migration_upgrade_downgrade_upgrade_lifecycle(
         project_root,
         step2_database_url,
         "upgrade",
-        "head",
+        STEP2_REVISION,
     )
 
     engine = _new_engine(step2_database_url)
@@ -240,7 +243,7 @@ def test_step2_migration_upgrade_downgrade_upgrade_lifecycle(
         project_root,
         step2_database_url,
         "upgrade",
-        "head",
+        STEP2_REVISION,
     )
 
     engine = _new_engine(step2_database_url)

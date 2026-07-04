@@ -27,6 +27,7 @@ class ImportJob(Base):
         ),
         sa.Index("ix_import_jobs_status", "status"),
         sa.Index("ix_import_jobs_status_last_heartbeat_at", "status", "last_heartbeat_at"),
+        sa.Index("ix_import_jobs_idempotency_fingerprint", "idempotency_fingerprint"),
     )
 
     id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), primary_key=True, default=uuid4)

@@ -47,6 +47,11 @@ class ImportRepository:
         statement = select(ImportJob.id).where(ImportJob.idempotency_key == idempotency_key)
         return self._session.scalar(statement)
 
+    def acquire_fingerprint_lock(self, idempotency_fingerprint: str) -> None:
+        self._session.execute(
+            select(func.pg_advisory_xact_lock(func.hashtext(idempotency_fingerprint)))
+        )
+
     def get_snapshot_by_idempotency_key(self, idempotency_key: str) -> ImportSnapshot | None:
         statement = select(
             ImportJob.id,
@@ -54,6 +59,32 @@ class ImportRepository:
             ImportJob.created_at,
             ImportJob.idempotency_fingerprint,
         ).where(ImportJob.idempotency_key == idempotency_key)
+        row = self._session.execute(statement).one_or_none()
+        if row is None:
+            return None
+        import_id, status, created_at, idempotency_fingerprint = row
+        return ImportSnapshot(
+            import_id=import_id,
+            status=status,
+            created_at=created_at,
+            idempotency_fingerprint=idempotency_fingerprint,
+        )
+
+    def get_snapshot_by_fingerprint(
+        self,
+        idempotency_fingerprint: str,
+    ) -> ImportSnapshot | None:
+        statement = (
+            select(
+                ImportJob.id,
+                ImportJob.status,
+                ImportJob.created_at,
+                ImportJob.idempotency_fingerprint,
+            )
+            .where(ImportJob.idempotency_fingerprint == idempotency_fingerprint)
+            .order_by(ImportJob.created_at.desc(), ImportJob.id.desc())
+            .limit(1)
+        )
         row = self._session.execute(statement).one_or_none()
         if row is None:
             return None
