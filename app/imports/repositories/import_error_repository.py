@@ -1,10 +1,10 @@
 from __future__ import annotations
 
 from collections.abc import Sequence
-
 from sqlalchemy.orm import Session
 
 from app.db.models.import_error import ImportError as ImportErrorRow
+from app.imports.jsonb import jsonb_safe
 
 
 class ImportErrorRepository:
@@ -14,6 +14,10 @@ class ImportErrorRepository:
     def bulk_insert(self, import_errors: Sequence[ImportErrorRow]) -> int:
         if not import_errors:
             return 0
-        self._session.add_all(list(import_errors))
+        rows = list(import_errors)
+        for import_error in rows:
+            import_error.raw_data = jsonb_safe(import_error.raw_data)
+        self._session.add_all(rows)
         self._session.flush()
-        return len(import_errors)
+        return len(rows)
+

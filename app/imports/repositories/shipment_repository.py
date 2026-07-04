@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from collections.abc import Iterable, Sequence
+from collections.abc import Sequence
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -19,8 +19,8 @@ class ShipmentRepository:
         self._session.flush()
         return len(shipments)
 
-    def find_existing_shipment_codes(self, shipment_codes: Iterable[str]) -> set[str]:
-        codes = sorted(set(shipment_codes))
+    def find_existing_shipment_codes(self, shipment_codes: set[str]) -> set[str]:
+        codes = sorted(shipment_codes)
         if not codes:
             return set()
         statement = select(Shipment.shipment_code).where(Shipment.shipment_code.in_(codes))

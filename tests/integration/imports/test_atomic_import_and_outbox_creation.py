@@ -8,10 +8,7 @@ from sqlalchemy.exc import IntegrityError
 
 from app.db.models.import_dispatch_outbox import ImportDispatchOutbox
 from app.db.models.import_job import ImportJob
-from app.imports.repositories.import_dispatch_outbox_repository import (
-    ImportDispatchOutboxRepository,
-)
-from app.imports.repositories.import_job_repository import ImportJobRepository
+from app.imports.repositories.import_repository import ImportRepository
 
 
 def _new_import_job(job_id) -> ImportJob:
@@ -32,13 +29,13 @@ def test_import_job_and_outbox_commit_atomically(step2_session_factory) -> None:
     outbox_id = uuid4()
 
     with step2_session_factory() as session, session.begin():
-        job_repository = ImportJobRepository(session)
-        outbox_repository = ImportDispatchOutboxRepository(session)
+        job_repository = ImportRepository(session)
+        outbox_repository = ImportRepository(session)
         assert job_repository._session is session
         assert outbox_repository._session is session
 
-        persisted_job_id = job_repository.create(_new_import_job(job_id))
-        persisted_outbox_id = outbox_repository.create(
+        persisted_job_id = job_repository.create_import_job(_new_import_job(job_id))
+        persisted_outbox_id = outbox_repository.create_dispatch_intent(
             ImportDispatchOutbox(id=outbox_id, import_id=job_id),
         )
 
@@ -56,10 +53,10 @@ def test_failed_outbox_insert_rolls_back_import_job(step2_session_factory) -> No
 
     with pytest.raises(IntegrityError):
         with step2_session_factory() as session, session.begin():
-            job_repository = ImportJobRepository(session)
-            outbox_repository = ImportDispatchOutboxRepository(session)
-            job_repository.create(_new_import_job(job_id))
-            outbox_repository.create(
+            job_repository = ImportRepository(session)
+            outbox_repository = ImportRepository(session)
+            job_repository.create_import_job(_new_import_job(job_id))
+            outbox_repository.create_dispatch_intent(
                 ImportDispatchOutbox(id=outbox_id, import_id=job_id, status="BROKEN"),
             )
 

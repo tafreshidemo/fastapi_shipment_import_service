@@ -12,9 +12,8 @@ from app.db.models.import_error import ImportError as ImportErrorRow
 from app.db.models.import_job import ImportJob
 from app.db.models.shipment import Shipment
 from app.imports.repositories import (
-    ImportDispatchOutboxRepository,
     ImportErrorRepository,
-    ImportJobRepository,
+    ImportRepository,
     ShipmentRepository,
 )
 
@@ -100,19 +99,18 @@ def test_repositories_use_caller_session_without_transaction_ownership(
     )
 
     try:
-        import_repository = ImportJobRepository(session)
-        outbox_repository = ImportDispatchOutboxRepository(session)
+        import_repository = ImportRepository(session)
 
         job = _make_job()
 
-        persisted_job_id = import_repository.create(job)
+        persisted_job_id = import_repository.create_import_job(job)
 
         assert persisted_job_id == job.id
         assert import_repository.get_status_by_id(job.id) == "PENDING"
         assert import_repository.get_status_by_id(uuid4()) is None
         assert import_repository.get_id_by_idempotency_key(job.idempotency_key) == job.id
 
-        outbox_id = outbox_repository.create(ImportDispatchOutbox(import_id=job.id))
+        outbox_id = import_repository.create_dispatch_intent(ImportDispatchOutbox(import_id=job.id))
 
         assert isinstance(outbox_id, UUID)
         assert calls == {
@@ -137,7 +135,7 @@ def test_import_job_status_lookup_returns_plain_scalar(
         session.add(job)
         session.flush()
 
-        repository = ImportJobRepository(session)
+        repository = ImportRepository(session)
 
         status = repository.get_status_by_id(job.id)
         missing_status = repository.get_status_by_id(uuid4())
@@ -280,6 +278,43 @@ def test_bulk_repositories_insert_multiple_rows_with_one_flush_per_call(
     assert import_error_count == 2
 
 
+
+def test_import_error_repository_makes_raw_data_jsonb_safe(step2_session_factory) -> None:
+    from datetime import date, datetime, timezone
+
+    with step2_session_factory() as session, session.begin():
+        job = _make_job()
+        session.add(job)
+        session.flush()
+
+        repository = ImportErrorRepository(session)
+        repository.bulk_insert(
+            [
+                ImportErrorRow(
+                    import_id=job.id,
+                    row_number=2,
+                    field="delivery_date",
+                    error="invalid row",
+                    raw_data={
+                        "weight_kg": Decimal("12.345"),
+                        "price": Decimal("99.99"),
+                        "delivery_date": date(2026, 7, 4),
+                        "seen_at": datetime(2026, 7, 4, 12, 30, tzinfo=timezone.utc),
+                    },
+                )
+            ]
+        )
+
+    with step2_session_factory() as session:
+        raw_data = session.scalar(sa.select(ImportErrorRow.raw_data))
+
+    assert raw_data == {
+        "weight_kg": "12.345",
+        "price": "99.99",
+        "delivery_date": "2026-07-04",
+        "seen_at": "2026-07-04T12:30:00+00:00",
+    }
+
 def test_empty_bulk_insert_does_not_flush(
     step2_session_factory,
     monkeypatch: pytest.MonkeyPatch,
@@ -402,6 +437,14 @@ def test_no_future_repository_modules_exist() -> None:
         (project_root / "app" / "imports" / "repositories" / "import_claim_repository.py"),
         (project_root / "app" / "imports" / "repositories" / "import_progress_repository.py"),
         (project_root / "app" / "outbox" / "repositories" / "outbox_repository.py"),
+        (project_root / "app" / "imports" / "repositories" / "import_job_repository.py"),
+        (
+            project_root
+            / "app"
+            / "imports"
+            / "repositories"
+            / "import_dispatch_outbox_repository.py"
+        ),
     ]
 
     assert all(not module_path.exists() for module_path in future_modules)

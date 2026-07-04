@@ -9,10 +9,6 @@ from app.core.settings import Settings
 from app.db.models.import_dispatch_outbox import ImportDispatchOutbox
 from app.db.models.import_job import ImportJob
 from app.imports.dto import ImportCreatedResult
-from app.imports.repositories.import_dispatch_outbox_repository import (
-    ImportDispatchOutboxRepository,
-)
-from app.imports.repositories.import_job_repository import ImportJobRepository
 from app.imports.repositories.import_repository import ImportRepository
 
 
@@ -47,8 +43,6 @@ class CreateImportService:
     ) -> ImportCreateOutcome:
         with self._session_factory() as session:
             import_repository = ImportRepository(session)
-            import_job_repository = ImportJobRepository(session)
-            dispatch_outbox_repository = ImportDispatchOutboxRepository(session)
 
             if idempotency_key is not None:
                 existing = import_repository.get_snapshot_by_idempotency_key(idempotency_key)
@@ -83,8 +77,10 @@ class CreateImportService:
             )
 
             try:
-                import_job_repository.create(import_job)
-                dispatch_outbox_repository.create(ImportDispatchOutbox(import_id=import_job.id))
+                import_repository.create_import_job(import_job)
+                import_repository.create_dispatch_intent(
+                    ImportDispatchOutbox(import_id=import_job.id)
+                )
                 session.commit()
             except IntegrityError as exc:
                 session.rollback()
