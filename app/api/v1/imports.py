@@ -3,6 +3,7 @@ from __future__ import annotations
 from dataclasses import asdict
 from http import HTTPStatus
 from pathlib import Path
+from uuid import UUID
 
 import aiofiles
 from fastapi import APIRouter, Depends, File, Header, UploadFile
@@ -10,6 +11,7 @@ from sqlalchemy.orm import Session, sessionmaker
 from starlette.concurrency import run_in_threadpool
 
 from app.api.errors import ApiError
+from app.common.pagination import InvalidPaginationError, PageRequest, parse_page_request
 from app.core.settings import Settings, get_settings
 from app.db.session import get_session_factory
 from app.imports.services.create_import import (
@@ -17,13 +19,15 @@ from app.imports.services.create_import import (
     DatabaseWriteError,
     IdempotencyConflictError,
 )
+from app.imports.services.get_import_status import GetImportStatusService, ImportNotFoundError
+from app.imports.services.list_import_errors import ListImportErrorsService
 from app.storage.local_file_storage import (
     LocalFileStorage,
     StoredFile,
     UploadTooLargeError,
 )
 
-router = APIRouter()
+router = APIRouter(tags=["imports"])
 FILE_DEFAULT = File(default=None)
 IDEMPOTENCY_KEY_HEADER = Header(default=None, alias="Idempotency-Key")
 SETTINGS_DEPENDENCY = Depends(get_settings)
@@ -158,3 +162,61 @@ async def create_import(
         await storage.delete_if_exists(Path(stored_file.stored_file_path))
 
     return asdict(outcome.result)
+
+
+@router.get("/imports/{import_id}/errors")
+def list_import_errors(
+    import_id: UUID,
+    page: str | None = None,
+    page_size: str | None = None,
+    settings: Settings = SETTINGS_DEPENDENCY,
+    session_factory: sessionmaker[Session] = SESSION_FACTORY_DEPENDENCY,
+) -> dict[str, object]:
+    page_request = _parse_page_request(
+        page=page,
+        page_size=page_size,
+        settings=settings,
+    )
+    try:
+        return ListImportErrorsService(session_factory).list_errors(
+            import_id=import_id,
+            page_request=page_request,
+        )
+    except ImportNotFoundError as exc:
+        raise _import_not_found_error() from exc
+
+
+@router.get("/imports/{import_id}")
+def get_import_status(
+    import_id: UUID,
+    session_factory: sessionmaker[Session] = SESSION_FACTORY_DEPENDENCY,
+) -> dict[str, object]:
+    try:
+        return GetImportStatusService(session_factory).get_status(import_id)
+    except ImportNotFoundError as exc:
+        raise _import_not_found_error() from exc
+
+
+def _parse_page_request(
+    *,
+    page: str | None,
+    page_size: str | None,
+    settings: Settings,
+) -> PageRequest:
+    try:
+        return parse_page_request(
+            page=page,
+            page_size=page_size,
+            default_page_size=settings.default_page_size,
+            max_page_size=settings.max_page_size,
+        )
+    except InvalidPaginationError as exc:
+        raise ApiError("INVALID_PAGINATION", str(exc)) from exc
+
+
+def _import_not_found_error() -> ApiError:
+    return ApiError(
+        "IMPORT_NOT_FOUND",
+        "Import job was not found.",
+        status_code=HTTPStatus.NOT_FOUND,
+    )

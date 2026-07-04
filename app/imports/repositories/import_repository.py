@@ -4,12 +4,13 @@ from dataclasses import dataclass
 from datetime import datetime
 from uuid import UUID
 
-from sqlalchemy import func, select, update
+from sqlalchemy import exists, func, select, update
 from sqlalchemy.orm import Session
 
 from app.db.models.import_dispatch_outbox import ImportDispatchOutbox
 from app.db.models.import_job import ImportJob
 from app.domain.import_states import ImportStatus
+from app.imports.dto import ImportStatusReadModel
 
 
 @dataclass(frozen=True, slots=True)
@@ -37,6 +38,10 @@ class ImportRepository:
     def get_status_by_id(self, import_id: UUID) -> str | None:
         statement = select(ImportJob.status).where(ImportJob.id == import_id)
         return self._session.scalar(statement)
+
+    def exists(self, import_id: UUID) -> bool:
+        statement = select(exists().where(ImportJob.id == import_id))
+        return bool(self._session.scalar(statement))
 
     def get_id_by_idempotency_key(self, idempotency_key: str) -> UUID | None:
         statement = select(ImportJob.id).where(ImportJob.idempotency_key == idempotency_key)
@@ -78,3 +83,35 @@ class ImportRepository:
             )
         )
         return result.rowcount == 1
+
+    def get_status_read_model(self, import_id: UUID) -> ImportStatusReadModel | None:
+        row = self._session.execute(
+            select(
+                ImportJob.id.label("import_id"),
+                ImportJob.status,
+                ImportJob.total_rows,
+                ImportJob.processed_rows,
+                ImportJob.success_count,
+                ImportJob.failed_count,
+                ImportJob.created_at,
+                ImportJob.started_at,
+                ImportJob.finished_at,
+                ImportJob.last_failure_reason,
+                ImportJob.failure_reason,
+            ).where(ImportJob.id == import_id)
+        ).one_or_none()
+        if row is None:
+            return None
+        return ImportStatusReadModel(
+            import_id=row.import_id,
+            status=row.status,
+            total_rows=row.total_rows,
+            processed_rows=row.processed_rows,
+            success_count=row.success_count,
+            failed_count=row.failed_count,
+            created_at=row.created_at,
+            started_at=row.started_at,
+            finished_at=row.finished_at,
+            last_failure_reason=row.last_failure_reason,
+            failure_reason=row.failure_reason,
+        )

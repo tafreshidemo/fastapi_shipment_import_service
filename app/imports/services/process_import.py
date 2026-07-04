@@ -119,6 +119,13 @@ class ProcessImportService:
                 )
             except WorkbookStructureError as exc:
                 if claimed_import is not None:
+                    logger.exception(
+                        "Workbook structure processing failed",
+                        extra={
+                            "import_id": str(claimed_import.import_id),
+                            "stored_file_path": str(claimed_import.stored_file_path),
+                        },
+                    )
                     self._mark_failed(
                         session=session,
                         progress_repository=progress_repository,

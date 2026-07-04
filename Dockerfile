@@ -36,6 +36,7 @@ RUN chmod +x /app/scripts/run_migrations.sh \
 
 RUN addgroup --system app \
     && adduser --system --ingroup app app \
+    && mkdir -p /app/data/uploads \
     && chown -R app:app /app
 
 USER app

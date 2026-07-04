@@ -21,6 +21,7 @@ celery_app = Celery(
 )
 celery_app.conf.update(
     task_default_queue="imports.dispatch",
+    task_default_queue_type="quorum",
     task_default_exchange=import_exchange.name,
     task_default_exchange_type=import_exchange.type,
     task_default_routing_key="imports.dispatch",
@@ -29,7 +30,9 @@ celery_app.conf.update(
             "imports.dispatch",
             exchange=import_exchange,
             routing_key="imports.dispatch",
+            durable=True,
             queue_arguments={
+                "x-queue-type": "quorum",
                 "x-dead-letter-exchange": dlx_exchange.name,
                 "x-dead-letter-routing-key": "imports.dispatch.dlq",
             },
@@ -38,8 +41,13 @@ celery_app.conf.update(
             "imports.dispatch.dlq",
             exchange=dlx_exchange,
             routing_key="imports.dispatch.dlq",
+            durable=True,
+            queue_arguments={"x-queue-type": "quorum"},
         ),
     ),
+    broker_transport_options={"confirm_publish": True},
+    control_queue_exclusive=True,
+    worker_detect_quorum_queues=True,
     worker_prefetch_multiplier=settings.celery_worker_prefetch_multiplier,
     task_acks_late=settings.celery_task_acks_late,
     task_reject_on_worker_lost=settings.celery_task_reject_on_worker_lost,

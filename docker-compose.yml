@@ -78,6 +78,8 @@ services:
         condition: service_healthy
     ports:
       - "${API_HOST_PORT:-8000}:8000"
+    volumes:
+      - upload_data:/app/data/uploads
     healthcheck:
       test:
         [
@@ -117,11 +119,15 @@ services:
         condition: service_completed_successfully
       rabbitmq:
         condition: service_healthy
+    volumes:
+      - upload_data:/app/data/uploads
     healthcheck:
       test:
         [
-          "CMD-SHELL",
-          "celery -A app.celery_app:celery_app inspect ping -d celery@$$HOSTNAME",
+          "CMD",
+          "python",
+          "-c",
+          "import sys; command = open('/proc/1/cmdline', 'rb').read(); sys.exit(0 if b'celery' in command and b'worker' in command else 1)",
         ]
       interval: 10s
       timeout: 10s
@@ -179,3 +185,4 @@ services:
 volumes:
   postgres_data:
   rabbitmq_data:
+  upload_data:
