@@ -14,9 +14,9 @@ def _index_map(
 
 
 def test_import_job_indexes_exist_with_expected_column_order(
-    step2_migrated_database_url: str,
+    migrated_database_url: str,
 ) -> None:
-    engine = create_engine(step2_migrated_database_url)
+    engine = create_engine(migrated_database_url)
 
     try:
         with engine.connect() as connection:
@@ -40,9 +40,9 @@ def test_import_job_indexes_exist_with_expected_column_order(
 
 
 def test_outbox_indexes_exist_with_expected_column_order(
-    step2_migrated_database_url: str,
+    migrated_database_url: str,
 ) -> None:
-    engine = create_engine(step2_migrated_database_url)
+    engine = create_engine(migrated_database_url)
 
     try:
         with engine.connect() as connection:
@@ -69,9 +69,9 @@ def test_outbox_indexes_exist_with_expected_column_order(
 
 
 def test_import_error_index_exists_with_expected_column_order(
-    step2_migrated_database_url: str,
+    migrated_database_url: str,
 ) -> None:
-    engine = create_engine(step2_migrated_database_url)
+    engine = create_engine(migrated_database_url)
 
     try:
         with engine.connect() as connection:
@@ -92,9 +92,9 @@ def test_import_error_index_exists_with_expected_column_order(
 
 
 def test_shipment_code_unique_constraint_creates_global_unique_index(
-    step2_migrated_database_url: str,
+    migrated_database_url: str,
 ) -> None:
-    engine = create_engine(step2_migrated_database_url)
+    engine = create_engine(migrated_database_url)
 
     try:
         with engine.connect() as connection:

@@ -132,7 +132,7 @@ def docker_runtime_stack() -> Iterator[DockerRuntimeStack]:
 
 
 @pytest.fixture
-def step2_database_url(
+def database_url(
     docker_runtime_stack: DockerRuntimeStack,
 ) -> Iterator[str]:
     database_url = create_temporary_database_url(
@@ -149,28 +149,28 @@ def step2_database_url(
 
 
 @pytest.fixture
-def step2_migrated_database_url(
-    step2_database_url: str,
+def migrated_database_url(
+    database_url: str,
 ) -> Iterator[str]:
     project_root = Path(__file__).resolve().parents[1]
 
     run_alembic(
         project_root,
-        step2_database_url,
+        database_url,
         "upgrade",
         "head",
     )
 
-    yield step2_database_url
+    yield database_url
 
 
 @pytest.fixture
-def step2_session_factory(
-    step2_migrated_database_url: str,
+def session_factory(
+    migrated_database_url: str,
 ):
     session_factory = build_session_factory(
         Settings(
-            database_url=step2_migrated_database_url
+            database_url=migrated_database_url
         )
     )
     engine = session_factory.kw["bind"]

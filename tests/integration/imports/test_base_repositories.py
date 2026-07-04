@@ -63,10 +63,10 @@ def _make_import_error(
 
 
 def test_repositories_use_caller_session_without_transaction_ownership(
-    step2_session_factory,
+    session_factory,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    session = step2_session_factory()
+    session = session_factory()
     original_close = session.close
 
     calls = {
@@ -128,9 +128,9 @@ def test_repositories_use_caller_session_without_transaction_ownership(
 
 
 def test_import_job_status_lookup_returns_plain_scalar(
-    step2_session_factory,
+    session_factory,
 ) -> None:
-    with step2_session_factory() as session, session.begin():
+    with session_factory() as session, session.begin():
         job = _make_job()
         session.add(job)
         session.flush()
@@ -147,10 +147,10 @@ def test_import_job_status_lookup_returns_plain_scalar(
 
 
 def test_bulk_repositories_insert_multiple_rows_with_one_flush_per_call(
-    step2_session_factory,
+    session_factory,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    session = step2_session_factory()
+    session = session_factory()
 
     original_add_all = session.add_all
     original_flush = session.flush
@@ -263,7 +263,7 @@ def test_bulk_repositories_insert_multiple_rows_with_one_flush_per_call(
         )
         session.close()
 
-    with step2_session_factory() as verification_session:
+    with session_factory() as verification_session:
         shipment_count = verification_session.scalar(
             sa.select(sa.func.count()).select_from(Shipment).where(Shipment.import_id == job.id)
         )
@@ -279,10 +279,10 @@ def test_bulk_repositories_insert_multiple_rows_with_one_flush_per_call(
 
 
 
-def test_import_error_repository_makes_raw_data_jsonb_safe(step2_session_factory) -> None:
+def test_import_error_repository_makes_raw_data_jsonb_safe(session_factory) -> None:
     from datetime import date, datetime, timezone
 
-    with step2_session_factory() as session, session.begin():
+    with session_factory() as session, session.begin():
         job = _make_job()
         session.add(job)
         session.flush()
@@ -305,7 +305,7 @@ def test_import_error_repository_makes_raw_data_jsonb_safe(step2_session_factory
             ]
         )
 
-    with step2_session_factory() as session:
+    with session_factory() as session:
         raw_data = session.scalar(sa.select(ImportErrorRow.raw_data))
 
     assert raw_data == {
@@ -316,10 +316,10 @@ def test_import_error_repository_makes_raw_data_jsonb_safe(step2_session_factory
     }
 
 def test_empty_bulk_insert_does_not_flush(
-    step2_session_factory,
+    session_factory,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    session = step2_session_factory()
+    session = session_factory()
 
     flush_calls = 0
 
@@ -348,10 +348,10 @@ def test_empty_bulk_insert_does_not_flush(
 
 
 def test_duplicate_shipment_lookup_uses_one_batch_query(
-    step2_session_factory,
+    session_factory,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    session = step2_session_factory()
+    session = session_factory()
 
     try:
         job = _make_job()
@@ -400,10 +400,10 @@ def test_duplicate_shipment_lookup_uses_one_batch_query(
 
 
 def test_duplicate_lookup_with_empty_input_does_not_query_database(
-    step2_session_factory,
+    session_factory,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    session = step2_session_factory()
+    session = session_factory()
 
     execute_calls = 0
 
@@ -431,7 +431,6 @@ def test_duplicate_lookup_with_empty_input_does_not_query_database(
 
 
 def test_no_future_repository_modules_exist() -> None:
-    """Step 6 keeps only the repositories declared through the active WBS step."""
     project_root = Path(__file__).resolve().parents[3]
 
     forbidden_modules = [
@@ -450,11 +449,10 @@ def test_no_future_repository_modules_exist() -> None:
 
     assert all(
         not module_path.exists() for module_path in forbidden_modules
-    ), "Unexpected repository module crosses the Step 6 WBS boundary."
+    ), "Unexpected repository module crosses the boundary."
 
 
-def test_step6_keeps_only_allowed_repository_modules() -> None:
-    """The canonical Step 5 and Step 6 repository modules are present."""
+def test_keeps_only_allowed_repository_modules() -> None:
     project_root = Path(__file__).resolve().parents[3]
 
     import_repository_names = {

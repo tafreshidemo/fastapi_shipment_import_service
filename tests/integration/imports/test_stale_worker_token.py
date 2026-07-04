@@ -13,7 +13,7 @@ from tests.support.imports import create_import_job, write_workbook
 
 
 def test_stale_worker_cannot_update_progress_or_terminal_state(
-    step2_session_factory,
+    session_factory,
     tmp_path,
 ) -> None:
     workbook_path = tmp_path / "imports.xlsx"
@@ -21,13 +21,13 @@ def test_stale_worker_cannot_update_progress_or_terminal_state(
     current_token = uuid4()
     stale_token = uuid4()
 
-    with step2_session_factory() as session:
+    with session_factory() as session:
         job = create_import_job(session, workbook_path=workbook_path, status="PROCESSING")
         job.processing_token = current_token
         job.locked_by_worker = "worker-current"
         session.commit()
 
-    with step2_session_factory() as session:
+    with session_factory() as session:
         repository = ImportProgressRepository(session)
         with session.begin():
             assert not repository.heartbeat(import_id=job.id, processing_token=stale_token)
@@ -44,7 +44,7 @@ def test_stale_worker_cannot_update_progress_or_terminal_state(
                 reason="stale worker",
             )
 
-    with step2_session_factory() as session:
+    with session_factory() as session:
         current_job = session.get(ImportJob, job.id)
 
     assert current_job is not None
@@ -53,7 +53,7 @@ def test_stale_worker_cannot_update_progress_or_terminal_state(
 
 
 def test_process_service_stops_when_ownership_changes_between_chunks(
-    step2_session_factory,
+    session_factory,
     tmp_path,
     monkeypatch,
 ) -> None:
@@ -68,7 +68,7 @@ def test_process_service_stops_when_ownership_changes_between_chunks(
         ],
     )
 
-    with step2_session_factory() as session:
+    with session_factory() as session:
         job = create_import_job(session, workbook_path=workbook_path)
         session.commit()
 
@@ -82,7 +82,7 @@ def test_process_service_stops_when_ownership_changes_between_chunks(
         result = original_process_next_chunk(self, **kwargs)
         if result is not None and not first_chunk_committed:
             first_chunk_committed = True
-            with step2_session_factory() as takeover_session:
+            with session_factory() as takeover_session:
                 with takeover_session.begin():
                     takeover_session.execute(
                         update(ImportJob)
@@ -101,12 +101,12 @@ def test_process_service_stops_when_ownership_changes_between_chunks(
     )
 
     ProcessImportService(
-        session_factory=step2_session_factory,
+        session_factory=session_factory,
         settings=Settings(processing_row_chunk_size=1),
         worker_id="worker-a",
     ).run(job.id)
 
-    with step2_session_factory() as session:
+    with session_factory() as session:
         current_job = session.get(ImportJob, job.id)
         shipments = session.scalars(
             select(Shipment)

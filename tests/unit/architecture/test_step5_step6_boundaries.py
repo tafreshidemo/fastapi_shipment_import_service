@@ -34,7 +34,7 @@ def test_worker_execution_does_not_depend_on_outbox_or_recovery() -> None:
 
 def test_outbox_and_recovery_do_not_depend_on_worker_execution() -> None:
     project_root = Path(__file__).resolve().parents[3]
-    step6_modules = [
+    outbox_modules = [
         project_root / "app" / "outbox" / "repositories" / "outbox_repository.py",
         project_root / "app" / "outbox" / "services" / "publish_outbox.py",
         project_root / "app" / "imports" / "services" / "recover_stale_imports.py",
@@ -43,7 +43,7 @@ def test_outbox_and_recovery_do_not_depend_on_worker_execution() -> None:
     ]
 
     imported_modules = set().union(
-        *(_imported_modules(module_path) for module_path in step6_modules)
+        *(_imported_modules(module_path) for module_path in outbox_modules)
     )
 
     assert "app.imports.services.process_import" not in imported_modules

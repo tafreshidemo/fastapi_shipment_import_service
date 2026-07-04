@@ -24,11 +24,11 @@ def _new_import_job(job_id) -> ImportJob:
     )
 
 
-def test_import_job_and_outbox_commit_atomically(step2_session_factory) -> None:
+def test_import_job_and_outbox_commit_atomically(session_factory) -> None:
     job_id = uuid4()
     outbox_id = uuid4()
 
-    with step2_session_factory() as session, session.begin():
+    with session_factory() as session, session.begin():
         job_repository = ImportRepository(session)
         outbox_repository = ImportRepository(session)
         assert job_repository._session is session
@@ -42,17 +42,17 @@ def test_import_job_and_outbox_commit_atomically(step2_session_factory) -> None:
     assert persisted_job_id == job_id
     assert persisted_outbox_id == outbox_id
 
-    with step2_session_factory() as session:
+    with session_factory() as session:
         assert session.scalar(sa.select(sa.func.count()).select_from(ImportJob)) == 1
         assert session.scalar(sa.select(sa.func.count()).select_from(ImportDispatchOutbox)) == 1
 
 
-def test_failed_outbox_insert_rolls_back_import_job(step2_session_factory) -> None:
+def test_failed_outbox_insert_rolls_back_import_job(session_factory) -> None:
     job_id = uuid4()
     outbox_id = uuid4()
 
     with pytest.raises(IntegrityError):
-        with step2_session_factory() as session, session.begin():
+        with session_factory() as session, session.begin():
             job_repository = ImportRepository(session)
             outbox_repository = ImportRepository(session)
             job_repository.create_import_job(_new_import_job(job_id))
@@ -60,6 +60,6 @@ def test_failed_outbox_insert_rolls_back_import_job(step2_session_factory) -> No
                 ImportDispatchOutbox(id=outbox_id, import_id=job_id, status="BROKEN"),
             )
 
-    with step2_session_factory() as session:
+    with session_factory() as session:
         assert session.scalar(sa.select(sa.func.count()).select_from(ImportJob)) == 0
         assert session.scalar(sa.select(sa.func.count()).select_from(ImportDispatchOutbox)) == 0

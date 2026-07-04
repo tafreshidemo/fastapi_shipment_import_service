@@ -11,7 +11,7 @@ from tests.support.imports import create_import_job, write_workbook
 
 
 def test_valid_and_invalid_rows_commit_as_one_completed_import(
-    step2_session_factory,
+    session_factory,
     tmp_path,
 ) -> None:
     workbook_path = tmp_path / "imports.xlsx"
@@ -22,17 +22,17 @@ def test_valid_and_invalid_rows_commit_as_one_completed_import(
             ["SHP-2", "Beta", "Austin", "Denver", 0, -1, "INVALID", None],
         ],
     )
-    with step2_session_factory() as session:
+    with session_factory() as session:
         job = create_import_job(session, workbook_path=workbook_path)
         session.commit()
 
     ProcessImportService(
-        session_factory=step2_session_factory,
+        session_factory=session_factory,
         settings=Settings(processing_row_chunk_size=500),
         worker_id="worker-a",
     ).run(job.id)
 
-    with step2_session_factory() as session:
+    with session_factory() as session:
         current_job = session.get(ImportJob, job.id)
         shipments = session.scalars(select(Shipment).where(Shipment.import_id == job.id)).all()
         errors = session.scalars(select(ImportError).where(ImportError.import_id == job.id)).all()
@@ -46,22 +46,22 @@ def test_valid_and_invalid_rows_commit_as_one_completed_import(
 
 
 def test_structural_workbook_failure_creates_no_row_errors(
-    step2_session_factory,
+    session_factory,
     tmp_path,
 ) -> None:
     workbook_path = tmp_path / "invalid.xlsx"
     workbook_path.write_bytes(b"not-a-workbook")
-    with step2_session_factory() as session:
+    with session_factory() as session:
         job = create_import_job(session, workbook_path=workbook_path)
         session.commit()
 
     ProcessImportService(
-        session_factory=step2_session_factory,
+        session_factory=session_factory,
         settings=Settings(),
         worker_id="worker-a",
     ).run(job.id)
 
-    with step2_session_factory() as session:
+    with session_factory() as session:
         current_job = session.get(ImportJob, job.id)
         errors = session.scalars(select(ImportError).where(ImportError.import_id == job.id)).all()
 
@@ -73,7 +73,7 @@ def test_structural_workbook_failure_creates_no_row_errors(
 
 
 def test_missing_required_headers_is_a_terminal_structural_failure(
-    step2_session_factory,
+    session_factory,
     tmp_path,
 ) -> None:
     workbook_path = tmp_path / "missing-headers.xlsx"
@@ -89,17 +89,17 @@ def test_missing_required_headers_is_a_terminal_structural_failure(
             "status",
         ],
     )
-    with step2_session_factory() as session:
+    with session_factory() as session:
         job = create_import_job(session, workbook_path=workbook_path)
         session.commit()
 
     ProcessImportService(
-        session_factory=step2_session_factory,
+        session_factory=session_factory,
         settings=Settings(),
         worker_id="worker-a",
     ).run(job.id)
 
-    with step2_session_factory() as session:
+    with session_factory() as session:
         current_job = session.get(ImportJob, job.id)
         shipments = session.scalars(select(Shipment).where(Shipment.import_id == job.id)).all()
         errors = session.scalars(select(ImportError).where(ImportError.import_id == job.id)).all()

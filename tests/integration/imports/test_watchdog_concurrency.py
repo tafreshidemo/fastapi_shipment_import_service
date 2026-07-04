@@ -15,13 +15,13 @@ from tests.support.imports import create_import_job, write_workbook
 
 
 def test_two_watchdogs_recover_one_stale_import_without_duplicate_requeue(
-    step2_session_factory,
+    session_factory,
     tmp_path,
 ) -> None:
     workbook_path = tmp_path / "watchdog-race.xlsx"
     write_workbook(workbook_path, [])
 
-    with step2_session_factory() as session:
+    with session_factory() as session:
         job = create_import_job(
             session,
             workbook_path=workbook_path,
@@ -38,7 +38,7 @@ def test_two_watchdogs_recover_one_stale_import_without_duplicate_requeue(
 
     def recover_once() -> int:
         service = RecoverStaleImportsService(
-            session_factory=step2_session_factory,
+            session_factory=session_factory,
             settings=settings,
         )
         start_recovery.wait(timeout=30)
@@ -47,7 +47,7 @@ def test_two_watchdogs_recover_one_stale_import_without_duplicate_requeue(
     with ThreadPoolExecutor(max_workers=2) as executor:
         recovery_counts = list(executor.map(lambda _: recover_once(), range(2)))
 
-    with step2_session_factory() as session:
+    with session_factory() as session:
         current_job = session.get(ImportJob, job.id)
         requeue_events = session.scalars(
             select(ImportDispatchOutbox).where(ImportDispatchOutbox.import_id == job.id)

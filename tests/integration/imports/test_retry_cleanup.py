@@ -15,7 +15,7 @@ from tests.support.imports import create_import_job, write_workbook
 
 
 def test_retry_cleanup_only_removes_rows_for_the_claimed_import(
-    step2_session_factory,
+    session_factory,
     tmp_path,
 ) -> None:
     workbook_path = tmp_path / "imports.xlsx"
@@ -23,7 +23,7 @@ def test_retry_cleanup_only_removes_rows_for_the_claimed_import(
         workbook_path,
         [["SHP-NEW", "Acme", "Boston", "Seattle", 1, 10, "PENDING", None]],
     )
-    with step2_session_factory() as session:
+    with session_factory() as session:
         target_job = create_import_job(
             session,
             workbook_path=workbook_path,
@@ -65,12 +65,12 @@ def test_retry_cleanup_only_removes_rows_for_the_claimed_import(
         session.commit()
 
     ProcessImportService(
-        session_factory=step2_session_factory,
+        session_factory=session_factory,
         settings=Settings(),
         worker_id="worker-a",
     ).run(target_job.id)
 
-    with step2_session_factory() as session:
+    with session_factory() as session:
         target_shipments = session.scalars(
             select(Shipment).where(Shipment.import_id == target_job.id)
         ).all()
@@ -88,7 +88,7 @@ def test_retry_cleanup_only_removes_rows_for_the_claimed_import(
 
 
 def test_operational_error_requeues_then_fails_only_at_max_attempts(
-    step2_session_factory,
+    session_factory,
     tmp_path,
     monkeypatch,
 ) -> None:
@@ -102,7 +102,7 @@ def test_operational_error_requeues_then_fails_only_at_max_attempts(
         workbook_path,
         [["SHP-RETRY", "Acme", "Boston", "Seattle", 1, 10, "PENDING", None]],
     )
-    with step2_session_factory() as session:
+    with session_factory() as session:
         target_job = create_import_job(session, workbook_path=workbook_path)
         other_job = create_import_job(session, workbook_path=workbook_path)
         session.add_all(
@@ -136,7 +136,7 @@ def test_operational_error_requeues_then_fails_only_at_max_attempts(
 
     monkeypatch.setattr(ShipmentRepository, "bulk_insert", raise_operational_error)
     service = ProcessImportService(
-        session_factory=step2_session_factory,
+        session_factory=session_factory,
         settings=Settings(import_max_attempts=3),
         worker_id="worker-a",
     )
@@ -144,7 +144,7 @@ def test_operational_error_requeues_then_fails_only_at_max_attempts(
     with pytest.raises(RetryableImportProcessingError):
         service.run(target_job.id)
 
-    with step2_session_factory() as session:
+    with session_factory() as session:
         first_attempt = session.get(ImportJob, target_job.id)
         assert first_attempt is not None
         assert first_attempt.status == "PENDING"
@@ -181,7 +181,7 @@ def test_operational_error_requeues_then_fails_only_at_max_attempts(
     with pytest.raises(RetryableImportProcessingError):
         service.run(target_job.id)
 
-    with step2_session_factory() as session:
+    with session_factory() as session:
         second_attempt = session.get(ImportJob, target_job.id)
         target_shipments = session.scalars(
             select(Shipment).where(Shipment.import_id == target_job.id)
@@ -211,7 +211,7 @@ def test_operational_error_requeues_then_fails_only_at_max_attempts(
 
     service.run(target_job.id)
 
-    with step2_session_factory() as session:
+    with session_factory() as session:
         exhausted_job = session.get(ImportJob, target_job.id)
 
     assert exhausted_job is not None

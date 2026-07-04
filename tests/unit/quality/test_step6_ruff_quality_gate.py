@@ -5,7 +5,7 @@ import sys
 from pathlib import Path
 
 
-def test_step6_sources_pass_ruff_when_pytest_runs() -> None:
+def test_sources_pass_ruff_when_pytest_runs() -> None:
     project_root = Path(__file__).resolve().parents[3]
     paths = [
         "app/outbox",
@@ -19,7 +19,7 @@ def test_step6_sources_pass_ruff_when_pytest_runs() -> None:
         "tests/integration/runtime/test_dlq_configuration.py",
         "tests/unit/workers/test_shared_recovery_service.py",
         "tests/unit/workers/test_task_retry_behavior.py",
-        "tests/unit/quality/test_step6_ruff_quality_gate.py",
+        "tests/unit/quality/test_ruff_quality_gate.py",
     ]
 
     result = subprocess.run(

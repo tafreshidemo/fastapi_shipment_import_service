@@ -7,10 +7,10 @@ from app.db.models.shipment import Shipment
 from app.imports.repositories.shipment_repository import ShipmentRepository
 
 
-def test_duplicate_lookup_uses_real_postgresql_set_lookup(step2_session_factory) -> None:
+def test_duplicate_lookup_uses_real_postgresql_set_lookup(session_factory) -> None:
     import_id = uuid4()
 
-    with step2_session_factory() as session:
+    with session_factory() as session:
         session.add(
             ImportJob(
                 id=import_id,
@@ -49,7 +49,7 @@ def test_duplicate_lookup_uses_real_postgresql_set_lookup(step2_session_factory)
         )
         session.commit()
 
-    with step2_session_factory() as session:
+    with session_factory() as session:
         repository = ShipmentRepository(session)
         existing = repository.find_existing_shipment_codes({"SHP-1", "SHP-2", "SHP-3"})
 

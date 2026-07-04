@@ -22,7 +22,7 @@ class SimulatedWorkerCrash(BaseException):
 
 
 def test_import_lifecycle_recovers_after_worker_crash_and_replay(
-    step2_session_factory,
+    session_factory,
     tmp_path,
     monkeypatch,
 ) -> None:
@@ -37,7 +37,7 @@ def test_import_lifecycle_recovers_after_worker_crash_and_replay(
         ],
     )
 
-    with step2_session_factory() as session:
+    with session_factory() as session:
         job = create_import_job(session, workbook_path=workbook_path)
         add_dispatch_event(
             session,
@@ -48,14 +48,14 @@ def test_import_lifecycle_recovers_after_worker_crash_and_replay(
 
     accepted_dispatches: list[str] = []
     initial_publisher = PublishOutboxService(
-        session_factory=step2_session_factory,
+        session_factory=session_factory,
         settings=Settings(outbox_batch_size=1),
         dispatch_import=lambda import_id: accepted_dispatches.append(str(import_id)),
     )
     assert initial_publisher.publish_due_events() == 1
 
     crashing_worker = ProcessImportService(
-        session_factory=step2_session_factory,
+        session_factory=session_factory,
         settings=Settings(processing_row_chunk_size=1),
         worker_id="crashed-worker",
     )
@@ -81,7 +81,7 @@ def test_import_lifecycle_recovers_after_worker_crash_and_replay(
     with pytest.raises(SimulatedWorkerCrash):
         crashing_worker.run(job.id)
 
-    with step2_session_factory() as session:
+    with session_factory() as session:
         crashed_job = session.get(ImportJob, job.id)
         persisted_shipments = session.scalars(
             select(Shipment)
@@ -102,24 +102,24 @@ def test_import_lifecycle_recovers_after_worker_crash_and_replay(
         session.commit()
 
     watchdog = RecoverStaleImportsService(
-        session_factory=step2_session_factory,
+        session_factory=session_factory,
         settings=Settings(processing_stale_timeout_seconds=60),
     )
     assert watchdog.recover_stale_imports(batch_size=10) == 1
 
     replay_worker = ProcessImportService(
-        session_factory=step2_session_factory,
+        session_factory=session_factory,
         settings=Settings(processing_row_chunk_size=1),
         worker_id="replay-worker",
     )
     replay_publisher = PublishOutboxService(
-        session_factory=step2_session_factory,
+        session_factory=session_factory,
         settings=Settings(outbox_batch_size=10),
         dispatch_import=replay_worker.run,
     )
     assert replay_publisher.publish_due_events() == 1
 
-    with step2_session_factory() as session:
+    with session_factory() as session:
         completed_job = session.get(ImportJob, job.id)
         shipments = session.scalars(
             select(Shipment)

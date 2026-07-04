@@ -14,7 +14,7 @@ from tests.support.imports import create_import_job, write_workbook
 
 
 def test_global_duplicate_race_becomes_row_validation_error(
-    step2_session_factory,
+    session_factory,
     tmp_path,
     monkeypatch,
 ) -> None:
@@ -23,7 +23,7 @@ def test_global_duplicate_race_becomes_row_validation_error(
         workbook_path,
         [["SHP-RACE", "Acme", "Boston", "Seattle", 1, 10, "PENDING", None]],
     )
-    with step2_session_factory() as session:
+    with session_factory() as session:
         target_job = create_import_job(session, workbook_path=workbook_path)
         competing_job = create_import_job(session, workbook_path=workbook_path)
         session.commit()
@@ -35,7 +35,7 @@ def test_global_duplicate_race_becomes_row_validation_error(
         nonlocal inserted_competitor
         if shipments and not inserted_competitor:
             inserted_competitor = True
-            with step2_session_factory() as competing_session:
+            with session_factory() as competing_session:
                 competing_session.add(
                     Shipment(
                         import_id=competing_job.id,
@@ -53,12 +53,12 @@ def test_global_duplicate_race_becomes_row_validation_error(
 
     monkeypatch.setattr(ShipmentRepository, "bulk_insert", insert_competing_shipment)
     ProcessImportService(
-        session_factory=step2_session_factory,
+        session_factory=session_factory,
         settings=Settings(),
         worker_id="worker-a",
     ).run(target_job.id)
 
-    with step2_session_factory() as session:
+    with session_factory() as session:
         current_job = session.get(ImportJob, target_job.id)
         errors = session.scalars(
             select(ImportError).where(ImportError.import_id == target_job.id)

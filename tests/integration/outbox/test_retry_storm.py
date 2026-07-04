@@ -16,7 +16,7 @@ from tests.support.outbox import add_dispatch_event
 
 
 def test_parallel_rabbitmq_disconnects_record_one_retry_per_outbox_event(
-    step2_session_factory,
+    session_factory,
     tmp_path,
 ) -> None:
     workbook_path = tmp_path / "retry-storm.xlsx"
@@ -27,7 +27,7 @@ def test_parallel_rabbitmq_disconnects_record_one_retry_per_outbox_event(
     event_count = publisher_count * batch_size
     due_at = datetime.now(UTC) - timedelta(seconds=1)
 
-    with step2_session_factory() as session:
+    with session_factory() as session:
         for _ in range(event_count):
             job = create_import_job(session, workbook_path=workbook_path)
             add_dispatch_event(session, import_id=job.id, available_at=due_at)
@@ -46,7 +46,7 @@ def test_parallel_rabbitmq_disconnects_record_one_retry_per_outbox_event(
 
     def publish_one_batch() -> int:
         service = PublishOutboxService(
-            session_factory=step2_session_factory,
+            session_factory=session_factory,
             settings=settings,
             dispatch_import=disconnected_dispatch,
         )
@@ -60,7 +60,7 @@ def test_parallel_rabbitmq_disconnects_record_one_retry_per_outbox_event(
     assert len(calls) == event_count
     assert len(set(calls)) == event_count
 
-    with step2_session_factory() as session:
+    with session_factory() as session:
         events = session.scalars(
             select(ImportDispatchOutbox).order_by(ImportDispatchOutbox.id)
         ).all()

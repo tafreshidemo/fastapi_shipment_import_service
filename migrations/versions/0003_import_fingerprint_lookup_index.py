@@ -6,7 +6,7 @@ from alembic import op
 
 # revision identifiers, used by Alembic.
 revision = "0003_fingerprint_index"
-down_revision = "0002_step2_models"
+down_revision = "0002_models"
 branch_labels = None
 depends_on = None
 

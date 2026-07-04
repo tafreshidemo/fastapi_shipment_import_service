@@ -14,7 +14,7 @@ from tests.support.outbox import add_dispatch_event
 
 
 def test_retry_storm_respects_backoff_and_stops_at_outbox_max_attempts(
-    step2_session_factory,
+    session_factory,
     tmp_path,
 ) -> None:
     """Many broker failures remain bounded by persisted retry state and maximum attempts."""
@@ -26,7 +26,7 @@ def test_retry_storm_respects_backoff_and_stops_at_outbox_max_attempts(
     settings = Settings(outbox_batch_size=event_count, outbox_max_attempts=3)
     due_at = datetime.now(UTC) - timedelta(seconds=1)
 
-    with step2_session_factory() as session:
+    with session_factory() as session:
         import_ids: list[UUID] = []
         event_ids = []
         for _ in range(event_count):
@@ -43,7 +43,7 @@ def test_retry_storm_respects_backoff_and_stops_at_outbox_max_attempts(
         raise ConnectionError("RabbitMQ unavailable")
 
     publisher = PublishOutboxService(
-        session_factory=step2_session_factory,
+        session_factory=session_factory,
         settings=settings,
         dispatch_import=broker_unavailable,
     )
@@ -51,7 +51,7 @@ def test_retry_storm_respects_backoff_and_stops_at_outbox_max_attempts(
     for attempt in range(1, settings.outbox_max_attempts + 1):
         assert publisher.publish_due_events() == event_count
 
-        with step2_session_factory() as session:
+        with session_factory() as session:
             events = session.scalars(
                 select(ImportDispatchOutbox)
                 .where(ImportDispatchOutbox.id.in_(event_ids))
@@ -71,7 +71,7 @@ def test_retry_storm_respects_backoff_and_stops_at_outbox_max_attempts(
             assert publisher.publish_due_events() == 0
             assert all(import_job.status == "PENDING" for import_job in imports)
 
-            with step2_session_factory() as session:
+            with session_factory() as session:
                 with session.begin():
                     session.execute(
                         update(ImportDispatchOutbox)

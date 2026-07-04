@@ -8,9 +8,9 @@ from tests.integration.api._query_support import add_import, add_import_error, b
 
 @pytest.mark.asyncio
 async def test_import_errors_use_deterministic_database_pagination(
-    step2_session_factory,
+    session_factory,
 ) -> None:
-    with step2_session_factory() as session:
+    with session_factory() as session:
         job = add_import(session)
         first = add_import_error(
             session,
@@ -35,7 +35,7 @@ async def test_import_errors_use_deterministic_database_pagination(
         )
         session.commit()
 
-    app = build_query_app(step2_session_factory)
+    app = build_query_app(session_factory)
     async with AsyncClient(
         transport=ASGITransport(app=app),
         base_url="http://testserver",

@@ -17,14 +17,14 @@ class SimulatedPublisherCrash(RuntimeError):
 
 
 def test_crash_after_broker_publish_replays_the_same_outbox_event(
-    step2_session_factory,
+    session_factory,
     tmp_path,
     monkeypatch,
 ) -> None:
     workbook_path = tmp_path / "publisher-crash.xlsx"
     write_workbook(workbook_path, [])
 
-    with step2_session_factory() as session:
+    with session_factory() as session:
         job = create_import_job(session, workbook_path=workbook_path)
         event = add_dispatch_event(session, import_id=job.id)
         session.commit()
@@ -35,7 +35,7 @@ def test_crash_after_broker_publish_replays_the_same_outbox_event(
         dispatched_import_ids.append(import_id)
 
     crashing_publisher = PublishOutboxService(
-        session_factory=step2_session_factory,
+        session_factory=session_factory,
         settings=Settings(outbox_stale_timeout_seconds=1),
         dispatch_import=record_dispatch,
     )
@@ -48,7 +48,7 @@ def test_crash_after_broker_publish_replays_the_same_outbox_event(
     with pytest.raises(SimulatedPublisherCrash):
         crashing_publisher.publish_due_events()
 
-    with step2_session_factory() as session:
+    with session_factory() as session:
         crashed_event = session.get(ImportDispatchOutbox, event.id)
 
     assert crashed_event is not None
@@ -56,7 +56,7 @@ def test_crash_after_broker_publish_replays_the_same_outbox_event(
     assert crashed_event.published_at is None
     assert crashed_event.claim_token is not None
 
-    with step2_session_factory() as session:
+    with session_factory() as session:
         with session.begin():
             session.execute(
                 update(ImportDispatchOutbox)
@@ -65,13 +65,13 @@ def test_crash_after_broker_publish_replays_the_same_outbox_event(
             )
 
     recovery_service = PublishOutboxService(
-        session_factory=step2_session_factory,
+        session_factory=session_factory,
         settings=Settings(outbox_stale_timeout_seconds=1),
         dispatch_import=record_dispatch,
     )
     recovery_service.recover_stale_claims()
 
-    with step2_session_factory() as session:
+    with session_factory() as session:
         recovered_event = session.get(ImportDispatchOutbox, event.id)
 
     assert recovered_event is not None
@@ -81,13 +81,13 @@ def test_crash_after_broker_publish_replays_the_same_outbox_event(
     assert recovered_event.last_error == "Outbox publisher claim expired."
 
     replay_publisher = PublishOutboxService(
-        session_factory=step2_session_factory,
+        session_factory=session_factory,
         settings=Settings(outbox_stale_timeout_seconds=1),
         dispatch_import=record_dispatch,
     )
     assert replay_publisher.publish_due_events() == 1
 
-    with step2_session_factory() as session:
+    with session_factory() as session:
         outbox_events = session.scalars(
             select(ImportDispatchOutbox).where(ImportDispatchOutbox.import_id == job.id)
         ).all()

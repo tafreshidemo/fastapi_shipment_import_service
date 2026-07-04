@@ -34,7 +34,7 @@ class Settings(BaseSettings):
     outbox_retry_delays_seconds: Annotated[tuple[int, ...], NoDecode] = Field(default=(2, 4, 8, 16))
     import_max_attempts: int = 3
     processing_stale_timeout_seconds: int = 300
-    watchdog_interval_seconds: int = 60
+    watchdog_interval_seconds: int = 60 * 5
     startup_recovery_batch_size: int = 100
     watchdog_batch_size: int = 100
     celery_worker_prefetch_multiplier: int = 1

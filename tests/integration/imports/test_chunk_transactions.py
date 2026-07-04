@@ -11,7 +11,7 @@ from tests.support.imports import create_import_job, write_workbook
 
 
 def test_failed_chunk_rolls_back_without_losing_prior_chunks(
-    step2_session_factory,
+    session_factory,
     tmp_path,
     monkeypatch,
 ) -> None:
@@ -23,7 +23,7 @@ def test_failed_chunk_rolls_back_without_losing_prior_chunks(
             ["SHP-2", "Beta", "Austin", "Denver", 2, 20, "DELIVERED", None],
         ],
     )
-    with step2_session_factory() as session:
+    with session_factory() as session:
         job = create_import_job(session, workbook_path=workbook_path)
         session.commit()
 
@@ -40,12 +40,12 @@ def test_failed_chunk_rolls_back_without_losing_prior_chunks(
 
     monkeypatch.setattr(ShipmentRepository, "bulk_insert", fail_after_second_flush)
     ProcessImportService(
-        session_factory=step2_session_factory,
+        session_factory=session_factory,
         settings=Settings(processing_row_chunk_size=1),
         worker_id="worker-a",
     ).run(job.id)
 
-    with step2_session_factory() as session:
+    with session_factory() as session:
         current_job = session.get(ImportJob, job.id)
         shipments = session.scalars(
             select(Shipment).where(Shipment.import_id == job.id).order_by(Shipment.shipment_code)

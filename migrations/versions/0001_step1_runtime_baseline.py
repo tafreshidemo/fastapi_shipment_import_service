@@ -1,6 +1,6 @@
-"""step1 runtime baseline"""
+"""runtime baseline"""
 
-revision = "0001_step1_runtime_baseline"
+revision = "0001_runtime_baseline"
 down_revision = None
 branch_labels = None
 depends_on = None

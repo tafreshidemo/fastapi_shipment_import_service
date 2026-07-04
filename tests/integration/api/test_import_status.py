@@ -9,11 +9,11 @@ from tests.integration.api._query_support import add_import, build_query_app
 
 
 @pytest.mark.asyncio
-async def test_import_status_exposes_the_wbs_contract_and_failure_fields(
-    step2_session_factory,
+async def test_import_status_exposes_the_contract_and_failure_fields(
+    session_factory,
 ) -> None:
     now = datetime.now(UTC)
-    with step2_session_factory() as session:
+    with session_factory() as session:
         pending = add_import(
             session,
             status="PENDING",
@@ -37,7 +37,7 @@ async def test_import_status_exposes_the_wbs_contract_and_failure_fields(
         )
         session.commit()
 
-    app = build_query_app(step2_session_factory)
+    app = build_query_app(session_factory)
     async with AsyncClient(
         transport=ASGITransport(app=app),
         base_url="http://testserver",
@@ -87,9 +87,9 @@ async def test_import_status_exposes_the_wbs_contract_and_failure_fields(
 
 @pytest.mark.asyncio
 async def test_import_status_not_found_uses_the_standard_error_contract(
-    step2_session_factory,
+    session_factory,
 ) -> None:
-    app = build_query_app(step2_session_factory)
+    app = build_query_app(session_factory)
 
     async with AsyncClient(
         transport=ASGITransport(app=app),

@@ -17,7 +17,7 @@ from tests.support.imports import create_import_job, write_workbook
 
 
 def test_database_disconnect_mid_chunk_rolls_back_current_chunk_then_retry_completes_once(
-    step2_session_factory,
+    session_factory,
     tmp_path,
     monkeypatch,
 ) -> None:
@@ -31,7 +31,7 @@ def test_database_disconnect_mid_chunk_rolls_back_current_chunk_then_retry_compl
             ["SHP-DB-2", "Beta", "Austin", "Denver", 2, 20, "DELIVERED", None],
         ],
     )
-    with step2_session_factory() as session:
+    with session_factory() as session:
         job = create_import_job(session, workbook_path=workbook_path)
         session.commit()
 
@@ -58,7 +58,7 @@ def test_database_disconnect_mid_chunk_rolls_back_current_chunk_then_retry_compl
     )
 
     service = ProcessImportService(
-        session_factory=step2_session_factory,
+        session_factory=session_factory,
         settings=Settings(processing_row_chunk_size=1, import_max_attempts=3),
         worker_id="db-chaos-worker",
     )
@@ -66,7 +66,7 @@ def test_database_disconnect_mid_chunk_rolls_back_current_chunk_then_retry_compl
     with pytest.raises(RetryableImportProcessingError):
         service.run(job.id)
 
-    with step2_session_factory() as session:
+    with session_factory() as session:
         requeued_job = session.get(ImportJob, job.id)
         shipments_after_disconnect = session.scalars(
             select(Shipment)
@@ -90,7 +90,7 @@ def test_database_disconnect_mid_chunk_rolls_back_current_chunk_then_retry_compl
     monkeypatch.setattr(ShipmentRepository, "bulk_insert", original_bulk_insert)
     service.run(job.id)
 
-    with step2_session_factory() as session:
+    with session_factory() as session:
         completed_job = session.get(ImportJob, job.id)
         final_shipments = session.scalars(
             select(Shipment)

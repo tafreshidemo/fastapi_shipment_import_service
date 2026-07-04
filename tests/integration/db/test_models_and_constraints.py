@@ -18,7 +18,7 @@ from app.db.models.import_job import ImportJob
 from app.db.models.shipment import Shipment
 from tests.support.postgres_database import run_alembic
 
-STEP2_REVISION = "0002_step2_models"
+REVISION = "0002_models"
 
 
 EXPECTED_TABLES = {
@@ -80,8 +80,8 @@ def _new_shipment(
     )
 
 
-def _create_import_job(step2_session_factory) -> UUID:
-    with step2_session_factory() as session, session.begin():
+def _create_import_job(session_factory) -> UUID:
+    with session_factory() as session, session.begin():
         job = _new_import_job()
         session.add(job)
         session.flush()
@@ -194,19 +194,19 @@ def _assert_import_job_foreign_key(
     assert foreign_key["options"].get("ondelete") == "CASCADE"
 
 
-def test_step2_migration_upgrade_downgrade_upgrade_lifecycle(
-    step2_database_url: str,
+def test_migration_upgrade_downgrade_upgrade_lifecycle(
+    database_url: str,
 ) -> None:
     project_root = Path(__file__).resolve().parents[3]
 
     run_alembic(
         project_root,
-        step2_database_url,
+        database_url,
         "upgrade",
-        STEP2_REVISION,
+        REVISION,
     )
 
-    engine = _new_engine(step2_database_url)
+    engine = _new_engine(database_url)
 
     try:
         with engine.connect() as connection:
@@ -221,12 +221,12 @@ def test_step2_migration_upgrade_downgrade_upgrade_lifecycle(
 
     run_alembic(
         project_root,
-        step2_database_url,
+        database_url,
         "downgrade",
         "-1",
     )
 
-    engine = _new_engine(step2_database_url)
+    engine = _new_engine(database_url)
 
     try:
         with engine.connect() as connection:
@@ -241,12 +241,12 @@ def test_step2_migration_upgrade_downgrade_upgrade_lifecycle(
 
     run_alembic(
         project_root,
-        step2_database_url,
+        database_url,
         "upgrade",
-        STEP2_REVISION,
+        REVISION,
     )
 
-    engine = _new_engine(step2_database_url)
+    engine = _new_engine(database_url)
 
     try:
         with engine.connect() as connection:
@@ -259,10 +259,10 @@ def test_step2_migration_upgrade_downgrade_upgrade_lifecycle(
         engine.dispose()
 
 
-def test_all_step2_tables_exist(
-    step2_migrated_database_url: str,
+def test_all_tables_exist(
+    migrated_database_url: str,
 ) -> None:
-    engine = _new_engine(step2_migrated_database_url)
+    engine = _new_engine(migrated_database_url)
 
     try:
         with engine.connect() as connection:
@@ -276,9 +276,9 @@ def test_all_step2_tables_exist(
 
 
 def test_import_jobs_schema_matches_model_and_migration(
-    step2_migrated_database_url: str,
+    migrated_database_url: str,
 ) -> None:
-    engine = _new_engine(step2_migrated_database_url)
+    engine = _new_engine(migrated_database_url)
 
     try:
         with engine.connect() as connection:
@@ -430,9 +430,9 @@ def test_import_jobs_schema_matches_model_and_migration(
 
 
 def test_outbox_schema_matches_model_and_migration(
-    step2_migrated_database_url: str,
+    migrated_database_url: str,
 ) -> None:
-    engine = _new_engine(step2_migrated_database_url)
+    engine = _new_engine(migrated_database_url)
 
     try:
         with engine.connect() as connection:
@@ -528,9 +528,9 @@ def test_outbox_schema_matches_model_and_migration(
 
 
 def test_shipments_schema_matches_model_and_migration(
-    step2_migrated_database_url: str,
+    migrated_database_url: str,
 ) -> None:
-    engine = _new_engine(step2_migrated_database_url)
+    engine = _new_engine(migrated_database_url)
 
     try:
         with engine.connect() as connection:
@@ -648,9 +648,9 @@ def test_shipments_schema_matches_model_and_migration(
 
 
 def test_import_errors_schema_matches_model_and_migration(
-    step2_migrated_database_url: str,
+    migrated_database_url: str,
 ) -> None:
-    engine = _new_engine(step2_migrated_database_url)
+    engine = _new_engine(migrated_database_url)
 
     try:
         with engine.connect() as connection:
@@ -712,9 +712,9 @@ def test_import_errors_schema_matches_model_and_migration(
 
 
 def test_import_job_server_defaults_are_persisted(
-    step2_session_factory,
+    session_factory,
 ) -> None:
-    with step2_session_factory() as session, session.begin():
+    with session_factory() as session, session.begin():
         job = _new_import_job(
             content_type=None,
             idempotency_key=None,
@@ -745,11 +745,11 @@ def test_import_job_server_defaults_are_persisted(
 
 
 def test_outbox_server_defaults_and_nullable_fields_are_persisted(
-    step2_session_factory,
+    session_factory,
 ) -> None:
-    import_id = _create_import_job(step2_session_factory)
+    import_id = _create_import_job(session_factory)
 
-    with step2_session_factory() as session, session.begin():
+    with session_factory() as session, session.begin():
         outbox = ImportDispatchOutbox(
             import_id=import_id,
         )
@@ -768,11 +768,11 @@ def test_outbox_server_defaults_and_nullable_fields_are_persisted(
 
 
 def test_idempotency_key_rejects_duplicate_non_null_values(
-    step2_session_factory,
+    session_factory,
 ) -> None:
     duplicate_key = "same-idempotency-key"
 
-    with step2_session_factory() as session, session.begin():
+    with session_factory() as session, session.begin():
         session.add(
             _new_import_job(
                 file_name="first.xlsx",
@@ -782,7 +782,7 @@ def test_idempotency_key_rejects_duplicate_non_null_values(
 
     with pytest.raises(IntegrityError):
         with (
-            step2_session_factory() as session,
+            session_factory() as session,
             session.begin(),
         ):
             session.add(
@@ -795,9 +795,9 @@ def test_idempotency_key_rejects_duplicate_non_null_values(
 
 
 def test_idempotency_key_allows_multiple_null_values(
-    step2_session_factory,
+    session_factory,
 ) -> None:
-    with step2_session_factory() as session, session.begin():
+    with session_factory() as session, session.begin():
         session.add_all(
             [
                 _new_import_job(
@@ -809,7 +809,7 @@ def test_idempotency_key_allows_multiple_null_values(
             ]
         )
 
-    with step2_session_factory() as session:
+    with session_factory() as session:
         null_key_count = session.scalar(
             select(sa.func.count())
             .select_from(ImportJob)
@@ -822,16 +822,16 @@ def test_idempotency_key_allows_multiple_null_values(
 
 
 def test_shipment_code_is_globally_unique_across_imports(
-    step2_session_factory,
+    session_factory,
 ) -> None:
     first_import_id = _create_import_job(
-        step2_session_factory
+        session_factory
     )
     second_import_id = _create_import_job(
-        step2_session_factory
+        session_factory
     )
 
-    with step2_session_factory() as session, session.begin():
+    with session_factory() as session, session.begin():
         session.add(
             _new_shipment(
                 first_import_id,
@@ -841,7 +841,7 @@ def test_shipment_code_is_globally_unique_across_imports(
 
     with pytest.raises(IntegrityError):
         with (
-            step2_session_factory() as session,
+            session_factory() as session,
             session.begin(),
         ):
             session.add(
@@ -854,11 +854,11 @@ def test_shipment_code_is_globally_unique_across_imports(
 
 
 def test_positive_weight_is_accepted(
-    step2_session_factory,
+    session_factory,
 ) -> None:
-    import_id = _create_import_job(step2_session_factory)
+    import_id = _create_import_job(session_factory)
 
-    with step2_session_factory() as session, session.begin():
+    with session_factory() as session, session.begin():
         shipment = _new_shipment(
             import_id,
             shipment_code="POSITIVE-WEIGHT",
@@ -878,14 +878,14 @@ def test_positive_weight_is_accepted(
     ],
 )
 def test_zero_and_negative_weight_are_rejected(
-    step2_session_factory,
+    session_factory,
     invalid_weight: Decimal,
 ) -> None:
-    import_id = _create_import_job(step2_session_factory)
+    import_id = _create_import_job(session_factory)
 
     with pytest.raises(IntegrityError):
         with (
-            step2_session_factory() as session,
+            session_factory() as session,
             session.begin(),
         ):
             session.add(
@@ -898,11 +898,11 @@ def test_zero_and_negative_weight_are_rejected(
 
 
 def test_zero_price_is_accepted(
-    step2_session_factory,
+    session_factory,
 ) -> None:
-    import_id = _create_import_job(step2_session_factory)
+    import_id = _create_import_job(session_factory)
 
-    with step2_session_factory() as session, session.begin():
+    with session_factory() as session, session.begin():
         shipment = _new_shipment(
             import_id,
             shipment_code="ZERO-PRICE",
@@ -915,13 +915,13 @@ def test_zero_price_is_accepted(
 
 
 def test_negative_price_is_rejected(
-    step2_session_factory,
+    session_factory,
 ) -> None:
-    import_id = _create_import_job(step2_session_factory)
+    import_id = _create_import_job(session_factory)
 
     with pytest.raises(IntegrityError):
         with (
-            step2_session_factory() as session,
+            session_factory() as session,
             session.begin(),
         ):
             session.add(
@@ -934,13 +934,13 @@ def test_negative_price_is_rejected(
 
 
 def test_invalid_shipment_status_is_rejected(
-    step2_session_factory,
+    session_factory,
 ) -> None:
-    import_id = _create_import_job(step2_session_factory)
+    import_id = _create_import_job(session_factory)
 
     with pytest.raises(IntegrityError):
         with (
-            step2_session_factory() as session,
+            session_factory() as session,
             session.begin(),
         ):
             session.add(
@@ -953,11 +953,11 @@ def test_invalid_shipment_status_is_rejected(
 
 
 def test_invalid_import_job_status_is_rejected(
-    step2_session_factory,
+    session_factory,
 ) -> None:
     with pytest.raises(IntegrityError):
         with (
-            step2_session_factory() as session,
+            session_factory() as session,
             session.begin(),
         ):
             session.add(
@@ -969,13 +969,13 @@ def test_invalid_import_job_status_is_rejected(
 
 
 def test_invalid_outbox_status_is_rejected(
-    step2_session_factory,
+    session_factory,
 ) -> None:
-    import_id = _create_import_job(step2_session_factory)
+    import_id = _create_import_job(session_factory)
 
     with pytest.raises(IntegrityError):
         with (
-            step2_session_factory() as session,
+            session_factory() as session,
             session.begin(),
         ):
             session.add(
@@ -988,11 +988,11 @@ def test_invalid_outbox_status_is_rejected(
 
 
 def test_failed_status_without_failure_reason_is_rejected(
-    step2_session_factory,
+    session_factory,
 ) -> None:
     with pytest.raises(IntegrityError):
         with (
-            step2_session_factory() as session,
+            session_factory() as session,
             session.begin(),
         ):
             session.add(
@@ -1005,9 +1005,9 @@ def test_failed_status_without_failure_reason_is_rejected(
 
 
 def test_failed_status_with_failure_reason_is_accepted(
-    step2_session_factory,
+    session_factory,
 ) -> None:
-    with step2_session_factory() as session, session.begin():
+    with session_factory() as session, session.begin():
         job = _new_import_job(
             status="FAILED",
             failure_reason="terminal processing failure",
@@ -1019,11 +1019,11 @@ def test_failed_status_with_failure_reason_is_accepted(
 
 
 def test_non_failed_status_with_failure_reason_is_rejected(
-    step2_session_factory,
+    session_factory,
 ) -> None:
     with pytest.raises(IntegrityError):
         with (
-            step2_session_factory() as session,
+            session_factory() as session,
             session.begin(),
         ):
             session.add(
@@ -1036,9 +1036,9 @@ def test_non_failed_status_with_failure_reason_is_rejected(
 
 
 def test_non_failed_status_without_failure_reason_is_accepted(
-    step2_session_factory,
+    session_factory,
 ) -> None:
-    with step2_session_factory() as session, session.begin():
+    with session_factory() as session, session.begin():
         job = _new_import_job(
             status="PROCESSING",
             failure_reason=None,
@@ -1050,12 +1050,12 @@ def test_non_failed_status_without_failure_reason_is_accepted(
 
 
 def test_customer_name_accepts_150_characters(
-    step2_session_factory,
+    session_factory,
 ) -> None:
-    import_id = _create_import_job(step2_session_factory)
+    import_id = _create_import_job(session_factory)
     valid_name = "x" * 150
 
-    with step2_session_factory() as session, session.begin():
+    with session_factory() as session, session.begin():
         shipment = _new_shipment(
             import_id,
             shipment_code="CUSTOMER-NAME-150",
@@ -1068,14 +1068,14 @@ def test_customer_name_accepts_150_characters(
 
 
 def test_customer_name_rejects_151_characters(
-    step2_session_factory,
+    session_factory,
 ) -> None:
-    import_id = _create_import_job(step2_session_factory)
+    import_id = _create_import_job(session_factory)
     invalid_name = "x" * 151
 
     with pytest.raises(DataError):
         with (
-            step2_session_factory() as session,
+            session_factory() as session,
             session.begin(),
         ):
             session.add(
@@ -1089,9 +1089,9 @@ def test_customer_name_rejects_151_characters(
 
 
 def test_deleting_import_job_cascades_to_all_child_tables(
-    step2_session_factory,
+    session_factory,
 ) -> None:
-    with step2_session_factory() as session, session.begin():
+    with session_factory() as session, session.begin():
         job = _new_import_job()
         session.add(job)
         session.flush()
@@ -1119,14 +1119,14 @@ def test_deleting_import_job_cascades_to_all_child_tables(
             ]
         )
 
-    with step2_session_factory() as session, session.begin():
+    with session_factory() as session, session.begin():
         session.execute(
             sa.delete(ImportJob).where(
                 ImportJob.id == job_id
             )
         )
 
-    with step2_session_factory() as session:
+    with session_factory() as session:
         outbox_count = session.scalar(
             select(sa.func.count())
             .select_from(ImportDispatchOutbox)

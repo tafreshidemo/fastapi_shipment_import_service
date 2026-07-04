@@ -17,7 +17,7 @@ from tests.support.outbox import add_dispatch_event
 
 
 def test_duplicate_outbox_events_do_not_duplicate_shipment_processing(
-    step2_session_factory,
+    session_factory,
     tmp_path,
 ) -> None:
     workbook_path = tmp_path / "duplicate-outbox-dispatch.xlsx"
@@ -27,14 +27,14 @@ def test_duplicate_outbox_events_do_not_duplicate_shipment_processing(
     )
     due_at = datetime.now(UTC) - timedelta(seconds=1)
 
-    with step2_session_factory() as session:
+    with session_factory() as session:
         job = create_import_job(session, workbook_path=workbook_path)
         add_dispatch_event(session, import_id=job.id, available_at=due_at)
         add_dispatch_event(session, import_id=job.id, available_at=due_at)
         session.commit()
 
     worker_service = ProcessImportService(
-        session_factory=step2_session_factory,
+        session_factory=session_factory,
         settings=Settings(),
         worker_id="outbox-test-worker",
     )
@@ -45,14 +45,14 @@ def test_duplicate_outbox_events_do_not_duplicate_shipment_processing(
         worker_service.run(import_id)
 
     publisher = PublishOutboxService(
-        session_factory=step2_session_factory,
+        session_factory=session_factory,
         settings=Settings(outbox_batch_size=10),
         dispatch_import=dispatch_to_worker,
     )
 
     assert publisher.publish_due_events() == 2
 
-    with step2_session_factory() as session:
+    with session_factory() as session:
         current_job = session.get(ImportJob, job.id)
         shipments = session.scalars(select(Shipment).where(Shipment.import_id == job.id)).all()
         errors = session.scalars(select(ImportError).where(ImportError.import_id == job.id)).all()

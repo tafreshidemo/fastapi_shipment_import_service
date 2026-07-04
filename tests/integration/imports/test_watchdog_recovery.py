@@ -38,14 +38,14 @@ def _create_processing_import(
 
 
 def test_watchdog_requeues_stale_import_once_and_leaves_fresh_import_untouched(
-    step2_session_factory,
+    session_factory,
     tmp_path,
 ) -> None:
     workbook_path = tmp_path / "watchdog.xlsx"
     write_workbook(workbook_path, [])
     now = datetime.now(UTC)
 
-    with step2_session_factory() as session:
+    with session_factory() as session:
         stale_job = _create_processing_import(
             session,
             workbook_path=workbook_path,
@@ -59,14 +59,14 @@ def test_watchdog_requeues_stale_import_once_and_leaves_fresh_import_untouched(
         session.commit()
 
     recovery = RecoverStaleImportsService(
-        session_factory=step2_session_factory,
+        session_factory=session_factory,
         settings=Settings(processing_stale_timeout_seconds=60),
     )
 
     assert recovery.recover_stale_imports(batch_size=10) == 1
     assert recovery.recover_stale_imports(batch_size=10) == 0
 
-    with step2_session_factory() as session:
+    with session_factory() as session:
         recovered_job = session.get(ImportJob, stale_job.id)
         untouched_job = session.get(ImportJob, fresh_job.id)
         requeue_events = session.scalars(
@@ -93,7 +93,7 @@ def test_watchdog_requeues_stale_import_once_and_leaves_fresh_import_untouched(
 
 
 def test_recovered_import_is_processed_once_when_duplicate_worker_delivery_occurs(
-    step2_session_factory,
+    session_factory,
     tmp_path,
 ) -> None:
     workbook_path = tmp_path / "recovered-worker-delivery.xlsx"
@@ -102,7 +102,7 @@ def test_recovered_import_is_processed_once_when_duplicate_worker_delivery_occur
         [["SHP-RECOVERED", "Acme", "Boston", "Seattle", 1, 10, "PENDING", None]],
     )
 
-    with step2_session_factory() as session:
+    with session_factory() as session:
         job = _create_processing_import(
             session,
             workbook_path=workbook_path,
@@ -111,20 +111,20 @@ def test_recovered_import_is_processed_once_when_duplicate_worker_delivery_occur
         session.commit()
 
     recovery = RecoverStaleImportsService(
-        session_factory=step2_session_factory,
+        session_factory=session_factory,
         settings=Settings(processing_stale_timeout_seconds=60),
     )
     assert recovery.recover_stale_imports(batch_size=10) == 1
 
     worker = ProcessImportService(
-        session_factory=step2_session_factory,
+        session_factory=session_factory,
         settings=Settings(),
         worker_id="recovered-worker",
     )
     worker.run(job.id)
     worker.run(job.id)
 
-    with step2_session_factory() as session:
+    with session_factory() as session:
         current_job = session.get(ImportJob, job.id)
         shipments = session.scalars(select(Shipment).where(Shipment.import_id == job.id)).all()
         errors = session.scalars(select(ImportError).where(ImportError.import_id == job.id)).all()
@@ -141,13 +141,13 @@ def test_recovered_import_is_processed_once_when_duplicate_worker_delivery_occur
 
 
 def test_watchdog_recovers_an_anomalously_old_heartbeat(
-    step2_session_factory,
+    session_factory,
     tmp_path,
 ) -> None:
     workbook_path = tmp_path / "corrupted-heartbeat.xlsx"
     write_workbook(workbook_path, [])
 
-    with step2_session_factory() as session:
+    with session_factory() as session:
         job = _create_processing_import(
             session,
             workbook_path=workbook_path,
@@ -156,13 +156,13 @@ def test_watchdog_recovers_an_anomalously_old_heartbeat(
         session.commit()
 
     recovery = RecoverStaleImportsService(
-        session_factory=step2_session_factory,
+        session_factory=session_factory,
         settings=Settings(processing_stale_timeout_seconds=60),
     )
 
     assert recovery.recover_stale_imports(batch_size=10) == 1
 
-    with step2_session_factory() as session:
+    with session_factory() as session:
         recovered_job = session.get(ImportJob, job.id)
         requeue_events = session.scalars(
             select(ImportDispatchOutbox).where(ImportDispatchOutbox.import_id == job.id)

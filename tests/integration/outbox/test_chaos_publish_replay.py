@@ -18,7 +18,7 @@ from tests.support.outbox import add_dispatch_event
 
 
 def test_rabbitmq_disconnect_then_publisher_replay_processes_import_once(
-    step2_session_factory,
+    session_factory,
     tmp_path,
     monkeypatch,
 ) -> None:
@@ -31,7 +31,7 @@ def test_rabbitmq_disconnect_then_publisher_replay_processes_import_once(
     )
     due_at = datetime.now(UTC) - timedelta(seconds=1)
 
-    with step2_session_factory() as session:
+    with session_factory() as session:
         job = create_import_job(session, workbook_path=workbook_path)
         event = add_dispatch_event(session, import_id=job.id, available_at=due_at)
         session.commit()
@@ -43,14 +43,14 @@ def test_rabbitmq_disconnect_then_publisher_replay_processes_import_once(
 
     settings = Settings(outbox_batch_size=1)
     failed_publisher = PublishOutboxService(
-        session_factory=step2_session_factory,
+        session_factory=session_factory,
         settings=settings,
     )
 
     assert failed_publisher.publish_due_events() == 1
     assert failed_publisher.publish_due_events() == 0
 
-    with step2_session_factory() as session:
+    with session_factory() as session:
         failed_event = session.get(ImportDispatchOutbox, event.id)
         current_job = session.get(ImportJob, job.id)
 
@@ -78,20 +78,20 @@ def test_rabbitmq_disconnect_then_publisher_replay_processes_import_once(
     monkeypatch.setattr(celery_app, "send_task", broker_restarted)
 
     restarted_publisher = PublishOutboxService(
-        session_factory=step2_session_factory,
+        session_factory=session_factory,
         settings=settings,
     )
     assert restarted_publisher.publish_due_events() == 1
 
     worker = ProcessImportService(
-        session_factory=step2_session_factory,
+        session_factory=session_factory,
         settings=Settings(),
         worker_id="broker-replay-worker",
     )
     worker.run(job.id)
     worker.run(job.id)
 
-    with step2_session_factory() as session:
+    with session_factory() as session:
         final_event = session.get(ImportDispatchOutbox, event.id)
         final_job = session.get(ImportJob, job.id)
         shipments = session.scalars(

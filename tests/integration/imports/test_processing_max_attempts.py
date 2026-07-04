@@ -13,13 +13,13 @@ from tests.support.imports import create_import_job, write_workbook
 
 
 def test_watchdog_marks_exhausted_stale_import_failed_without_requeue_intent(
-    step2_session_factory,
+    session_factory,
     tmp_path,
 ) -> None:
     workbook_path = tmp_path / "watchdog-exhausted.xlsx"
     write_workbook(workbook_path, [])
 
-    with step2_session_factory() as session:
+    with session_factory() as session:
         job = create_import_job(
             session,
             workbook_path=workbook_path,
@@ -33,13 +33,13 @@ def test_watchdog_marks_exhausted_stale_import_failed_without_requeue_intent(
         session.commit()
 
     recovery = RecoverStaleImportsService(
-        session_factory=step2_session_factory,
+        session_factory=session_factory,
         settings=Settings(processing_stale_timeout_seconds=60),
     )
 
     assert recovery.recover_stale_imports(batch_size=10) == 1
 
-    with step2_session_factory() as session:
+    with session_factory() as session:
         current_job = session.get(ImportJob, job.id)
         requeue_events = session.scalars(
             select(ImportDispatchOutbox).where(ImportDispatchOutbox.import_id == job.id)

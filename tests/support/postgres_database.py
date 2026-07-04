@@ -13,7 +13,7 @@ from sqlalchemy.engine import make_url
 def create_temporary_database_url(base_url: str) -> str:
     base = make_url(base_url)
     server_url = base.set(database="postgres")
-    database_name = f"step2_{uuid4().hex}"
+    database_name = f"temporary_{uuid4().hex}"
     engine = create_engine(server_url, isolation_level="AUTOCOMMIT")
     with engine.connect() as connection:
         connection.exec_driver_sql(f'CREATE DATABASE "{database_name}"')

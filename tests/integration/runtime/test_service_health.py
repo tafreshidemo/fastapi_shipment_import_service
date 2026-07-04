@@ -17,7 +17,7 @@ from tests.support.docker_runtime import (
 )
 
 
-def test_runtime_stack_starts_and_runs_step1_services(
+def test_runtime_stack_starts_and_runs_services(
     docker_runtime_stack: DockerRuntimeStack,
 ) -> None:
     postgres_health = inspect_health(docker_runtime_stack.project_root, "postgres")

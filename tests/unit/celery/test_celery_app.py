@@ -4,7 +4,7 @@ from app.celery_app import celery_app
 from app.core.settings import get_settings
 
 
-def test_step1_celery_queue_and_dlq_configuration() -> None:
+def test_celery_queue_and_dlq_configuration() -> None:
     settings = get_settings()
     queues = {queue.name: queue for queue in celery_app.conf.task_queues}
 

@@ -44,11 +44,11 @@ def _response_error(response_json: dict[str, object]) -> dict[str, object]:
 
 @pytest.mark.asyncio
 async def test_valid_xlsx_transport_returns_202_and_persists_import(
-    step2_session_factory: sessionmaker,
+    session_factory: sessionmaker,
     tmp_path: Path,
 ) -> None:
     upload_dir = tmp_path / "uploads"
-    app = _build_app(step2_session_factory, upload_dir)
+    app = _build_app(session_factory, upload_dir)
 
     async with AsyncClient(
         transport=ASGITransport(app=app),
@@ -65,7 +65,7 @@ async def test_valid_xlsx_transport_returns_202_and_persists_import(
     assert body["status"] == "PENDING"
     assert isinstance(body["created_at"], str)
 
-    with step2_session_factory() as session:
+    with session_factory() as session:
         job = session.get(ImportJob, UUID(body["import_id"]))
         assert job is not None
         assert job.status == "PENDING"
@@ -78,11 +78,11 @@ async def test_valid_xlsx_transport_returns_202_and_persists_import(
 
 @pytest.mark.asyncio
 async def test_non_xlsx_transport_is_rejected(
-    step2_session_factory: sessionmaker,
+    session_factory: sessionmaker,
     tmp_path: Path,
 ) -> None:
     upload_dir = tmp_path / "uploads"
-    app = _build_app(step2_session_factory, upload_dir)
+    app = _build_app(session_factory, upload_dir)
 
     async with AsyncClient(
         transport=ASGITransport(app=app),
@@ -100,7 +100,7 @@ async def test_non_xlsx_transport_is_rejected(
         "details": None,
     }
 
-    with step2_session_factory() as session:
+    with session_factory() as session:
         assert session.scalar(sa.select(sa.func.count()).select_from(ImportJob)) == 0
         assert session.scalar(sa.select(sa.func.count()).select_from(ImportDispatchOutbox)) == 0
 
@@ -109,11 +109,11 @@ async def test_non_xlsx_transport_is_rejected(
 
 @pytest.mark.asyncio
 async def test_missing_multipart_file_is_rejected(
-    step2_session_factory: sessionmaker,
+    session_factory: sessionmaker,
     tmp_path: Path,
 ) -> None:
     upload_dir = tmp_path / "uploads"
-    app = _build_app(step2_session_factory, upload_dir)
+    app = _build_app(session_factory, upload_dir)
 
     async with AsyncClient(
         transport=ASGITransport(app=app),
@@ -128,7 +128,7 @@ async def test_missing_multipart_file_is_rejected(
         "details": None,
     }
 
-    with step2_session_factory() as session:
+    with session_factory() as session:
         assert session.scalar(sa.select(sa.func.count()).select_from(ImportJob)) == 0
         assert session.scalar(sa.select(sa.func.count()).select_from(ImportDispatchOutbox)) == 0
 
@@ -137,12 +137,12 @@ async def test_missing_multipart_file_is_rejected(
 
 @pytest.mark.asyncio
 async def test_size_limit_is_enforced(
-    step2_session_factory: sessionmaker,
+    session_factory: sessionmaker,
     tmp_path: Path,
 ) -> None:
     upload_dir = tmp_path / "uploads"
     app = _build_app(
-        step2_session_factory,
+        session_factory,
         upload_dir,
         upload_read_chunk_size_bytes=32,
         max_upload_size_bytes=64,
@@ -164,7 +164,7 @@ async def test_size_limit_is_enforced(
         "details": None,
     }
 
-    with step2_session_factory() as session:
+    with session_factory() as session:
         assert session.scalar(sa.select(sa.func.count()).select_from(ImportJob)) == 0
         assert session.scalar(sa.select(sa.func.count()).select_from(ImportDispatchOutbox)) == 0
 
@@ -173,11 +173,11 @@ async def test_size_limit_is_enforced(
 
 @pytest.mark.asyncio
 async def test_invalid_zip_signature_is_rejected(
-    step2_session_factory: sessionmaker,
+    session_factory: sessionmaker,
     tmp_path: Path,
 ) -> None:
     upload_dir = tmp_path / "uploads"
-    app = _build_app(step2_session_factory, upload_dir)
+    app = _build_app(session_factory, upload_dir)
 
     async with AsyncClient(
         transport=ASGITransport(app=app),
@@ -195,7 +195,7 @@ async def test_invalid_zip_signature_is_rejected(
         "details": None,
     }
 
-    with step2_session_factory() as session:
+    with session_factory() as session:
         assert session.scalar(sa.select(sa.func.count()).select_from(ImportJob)) == 0
         assert session.scalar(sa.select(sa.func.count()).select_from(ImportDispatchOutbox)) == 0
 
@@ -204,12 +204,12 @@ async def test_invalid_zip_signature_is_rejected(
 
 @pytest.mark.asyncio
 async def test_pre_commit_failure_cleans_stored_file(
-    step2_session_factory: sessionmaker,
+    session_factory: sessionmaker,
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     upload_dir = tmp_path / "uploads"
-    app = _build_app(step2_session_factory, upload_dir)
+    app = _build_app(session_factory, upload_dir)
 
     class FailingCreateImportService:
         def __init__(self, *_args: object, **_kwargs: object) -> None:
@@ -236,7 +236,7 @@ async def test_pre_commit_failure_cleans_stored_file(
         "details": None,
     }
 
-    with step2_session_factory() as session:
+    with session_factory() as session:
         assert session.scalar(sa.select(sa.func.count()).select_from(ImportJob)) == 0
         assert session.scalar(sa.select(sa.func.count()).select_from(ImportDispatchOutbox)) == 0
 

@@ -13,7 +13,7 @@ from tests.support.outbox import add_dispatch_event
 
 
 def test_parallel_publishers_claim_disjoint_batches_with_skip_locked(
-    step2_session_factory,
+    session_factory,
     tmp_path,
 ) -> None:
     workbook_path = tmp_path / "claim-load.xlsx"
@@ -24,7 +24,7 @@ def test_parallel_publishers_claim_disjoint_batches_with_skip_locked(
     event_count = publisher_count * batch_size
     due_at = datetime.now(UTC) - timedelta(seconds=1)
 
-    with step2_session_factory() as session:
+    with session_factory() as session:
         for _ in range(event_count):
             job = create_import_job(session, workbook_path=workbook_path)
             add_dispatch_event(session, import_id=job.id, available_at=due_at)
@@ -33,7 +33,7 @@ def test_parallel_publishers_claim_disjoint_batches_with_skip_locked(
     start_claiming = Barrier(publisher_count)
 
     def claim_batch() -> set[object]:
-        with step2_session_factory() as session:
+        with session_factory() as session:
             repository = OutboxRepository(session)
             with session.begin():
                 start_claiming.wait(timeout=30)
@@ -50,7 +50,7 @@ def test_parallel_publishers_claim_disjoint_batches_with_skip_locked(
     assert [len(batch) for batch in claimed_batches] == [batch_size] * publisher_count
     assert len(claimed_ids) == event_count
 
-    with step2_session_factory() as session:
+    with session_factory() as session:
         events = session.scalars(
             select(ImportDispatchOutbox).order_by(ImportDispatchOutbox.id)
         ).all()

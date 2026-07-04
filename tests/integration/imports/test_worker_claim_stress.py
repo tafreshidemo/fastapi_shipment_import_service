@@ -14,7 +14,7 @@ from tests.support.imports import create_import_job, write_workbook
 
 
 def test_eight_workers_compete_for_one_import_without_double_processing(
-    step2_session_factory,
+    session_factory,
     tmp_path,
 ) -> None:
     """Concurrent duplicate delivery leaves exactly one database-backed worker owner."""
@@ -24,7 +24,7 @@ def test_eight_workers_compete_for_one_import_without_double_processing(
         workbook_path,
         [["SHP-STRESS-1", "Acme", "Boston", "Seattle", 1, 10, "PENDING", None]],
     )
-    with step2_session_factory() as session:
+    with session_factory() as session:
         job = create_import_job(session, workbook_path=workbook_path)
         session.commit()
 
@@ -33,7 +33,7 @@ def test_eight_workers_compete_for_one_import_without_double_processing(
 
     def process_once(worker_number: int) -> None:
         service = ProcessImportService(
-            session_factory=step2_session_factory,
+            session_factory=session_factory,
             settings=Settings(),
             worker_id=f"stress-worker-{worker_number}",
         )
@@ -43,7 +43,7 @@ def test_eight_workers_compete_for_one_import_without_double_processing(
     with ThreadPoolExecutor(max_workers=worker_count) as executor:
         list(executor.map(process_once, range(worker_count)))
 
-    with step2_session_factory() as session:
+    with session_factory() as session:
         current_job = session.get(ImportJob, job.id)
         shipments = session.scalars(
             select(Shipment).where(Shipment.import_id == job.id)

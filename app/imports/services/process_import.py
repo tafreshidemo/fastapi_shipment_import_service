@@ -110,7 +110,7 @@ class ProcessImportService:
                         failed_count=failed_count,
                     ):
                         raise StaleImportWorkerError
-
+                print(f"claim import: {str(claimed_import)}")
                 logger.info("Import completed", extra={"import_id": str(claimed_import.import_id)})
             except StaleImportWorkerError:
                 logger.info(
@@ -207,6 +207,7 @@ class ProcessImportService:
                     claimed_import=claimed_import,
                     chunk_result=chunk_result,
                 )
+            print(f"[_process_next_chunk] --> chunk_result: {chunk_result}")
             return chunk_result
         except IntegrityError as exc:
             if chunk_result is None:

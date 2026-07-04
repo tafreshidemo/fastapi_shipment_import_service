@@ -1,5 +1,3 @@
-"""step2 models constraints and repositories"""
-
 from __future__ import annotations
 
 import sqlalchemy as sa
@@ -7,8 +5,8 @@ from alembic import op
 from sqlalchemy.dialects import postgresql
 
 # revision identifiers, used by Alembic.
-revision = "0002_step2_models"
-down_revision = "0001_step1_runtime_baseline"
+revision = "0002_models"
+down_revision = "0001_runtime_baseline"
 branch_labels = None
 depends_on = None
 

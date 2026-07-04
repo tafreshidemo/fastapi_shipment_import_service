@@ -34,11 +34,11 @@ def _build_app(session_factory: sessionmaker, upload_dir: Path) -> FastAPI:
 
 @pytest.mark.asyncio
 async def test_same_idempotency_key_and_fingerprint_returns_same_import(
-    step2_session_factory: sessionmaker,
+    session_factory: sessionmaker,
     tmp_path: Path,
 ) -> None:
     upload_dir = tmp_path / "uploads"
-    app = _build_app(step2_session_factory, upload_dir)
+    app = _build_app(session_factory, upload_dir)
     payload = _xlsx_bytes("same-fingerprint")
 
     async with AsyncClient(
@@ -64,18 +64,18 @@ async def test_same_idempotency_key_and_fingerprint_returns_same_import(
     assert first_body["status"] == second_body["status"] == "PENDING"
     assert len(list(upload_dir.iterdir())) == 1
 
-    with step2_session_factory() as session:
+    with session_factory() as session:
         assert session.scalar(sa.select(sa.func.count()).select_from(ImportJob)) == 1
         assert session.scalar(sa.select(sa.func.count()).select_from(ImportDispatchOutbox)) == 1
 
 
 @pytest.mark.asyncio
 async def test_same_idempotency_key_and_different_fingerprint_returns_conflict(
-    step2_session_factory: sessionmaker,
+    session_factory: sessionmaker,
     tmp_path: Path,
 ) -> None:
     upload_dir = tmp_path / "uploads"
-    app = _build_app(step2_session_factory, upload_dir)
+    app = _build_app(session_factory, upload_dir)
 
     async with AsyncClient(
         transport=ASGITransport(app=app),
@@ -113,18 +113,18 @@ async def test_same_idempotency_key_and_different_fingerprint_returns_conflict(
     }
     assert len(list(upload_dir.iterdir())) == 1
 
-    with step2_session_factory() as session:
+    with session_factory() as session:
         assert session.scalar(sa.select(sa.func.count()).select_from(ImportJob)) == 1
         assert session.scalar(sa.select(sa.func.count()).select_from(ImportDispatchOutbox)) == 1
 
 
 @pytest.mark.asyncio
 async def test_identical_upload_without_idempotency_key_returns_duplicate_feedback(
-    step2_session_factory: sessionmaker,
+    session_factory: sessionmaker,
     tmp_path: Path,
 ) -> None:
     upload_dir = tmp_path / "uploads"
-    app = _build_app(step2_session_factory, upload_dir)
+    app = _build_app(session_factory, upload_dir)
     payload = _xlsx_bytes("manual-repeat")
 
     async with AsyncClient(
@@ -157,6 +157,6 @@ async def test_identical_upload_without_idempotency_key_returns_duplicate_feedba
     }
     assert len(list(upload_dir.iterdir())) == 1
 
-    with step2_session_factory() as session:
+    with session_factory() as session:
         assert session.scalar(sa.select(sa.func.count()).select_from(ImportJob)) == 1
         assert session.scalar(sa.select(sa.func.count()).select_from(ImportDispatchOutbox)) == 1

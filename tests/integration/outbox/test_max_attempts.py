@@ -12,13 +12,13 @@ from tests.support.outbox import add_dispatch_event
 
 
 def test_repeated_broker_failures_exhaust_outbox_and_fail_pending_import(
-    step2_session_factory,
+    session_factory,
     tmp_path,
 ) -> None:
     workbook_path = tmp_path / "outbox-max-attempts.xlsx"
     write_workbook(workbook_path, [])
 
-    with step2_session_factory() as session:
+    with session_factory() as session:
         job = create_import_job(session, workbook_path=workbook_path)
         event = add_dispatch_event(session, import_id=job.id)
         session.commit()
@@ -31,7 +31,7 @@ def test_repeated_broker_failures_exhaust_outbox_and_fail_pending_import(
 
     settings = Settings(outbox_max_attempts=5, outbox_retry_delays_seconds=(2, 4, 8, 16))
     publisher = PublishOutboxService(
-        session_factory=step2_session_factory,
+        session_factory=session_factory,
         settings=settings,
         dispatch_import=disconnected_dispatch,
     )
@@ -40,7 +40,7 @@ def test_repeated_broker_failures_exhaust_outbox_and_fail_pending_import(
         attempt_started_at = datetime.now(UTC)
         assert publisher.publish_due_events() == 1
 
-        with step2_session_factory() as session:
+        with session_factory() as session:
             current_event = session.get(ImportDispatchOutbox, event.id)
             current_job = session.get(ImportJob, job.id)
             assert current_event is not None
@@ -69,13 +69,13 @@ def test_repeated_broker_failures_exhaust_outbox_and_fail_pending_import(
 
 
 def test_dispatch_exhaustion_does_not_overwrite_an_import_already_processing(
-    step2_session_factory,
+    session_factory,
     tmp_path,
 ) -> None:
     workbook_path = tmp_path / "outbox-processing-race.xlsx"
     write_workbook(workbook_path, [])
 
-    with step2_session_factory() as session:
+    with session_factory() as session:
         job = create_import_job(session, workbook_path=workbook_path, status="PROCESSING")
         job.processing_token = UUID("11111111-1111-1111-1111-111111111111")
         job.locked_by_worker = "active-worker"
@@ -86,14 +86,14 @@ def test_dispatch_exhaustion_does_not_overwrite_an_import_already_processing(
         raise ConnectionError("RabbitMQ is unavailable")
 
     publisher = PublishOutboxService(
-        session_factory=step2_session_factory,
+        session_factory=session_factory,
         settings=Settings(outbox_max_attempts=5),
         dispatch_import=disconnected_dispatch,
     )
 
     assert publisher.publish_due_events() == 1
 
-    with step2_session_factory() as session:
+    with session_factory() as session:
         current_job = session.get(ImportJob, job.id)
         current_event = session.get(ImportDispatchOutbox, event.id)
 

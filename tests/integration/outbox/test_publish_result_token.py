@@ -12,19 +12,19 @@ from tests.support.outbox import add_dispatch_event
 
 
 def test_stale_publish_result_cannot_overwrite_a_reclaimed_outbox_event(
-    step2_session_factory,
+    session_factory,
     tmp_path,
 ) -> None:
     workbook_path = tmp_path / "publish-token.xlsx"
     write_workbook(workbook_path, [])
     due_at = datetime.now(UTC) - timedelta(seconds=1)
 
-    with step2_session_factory() as session:
+    with session_factory() as session:
         job = create_import_job(session, workbook_path=workbook_path)
         event = add_dispatch_event(session, import_id=job.id, available_at=due_at)
         session.commit()
 
-    with step2_session_factory() as session:
+    with session_factory() as session:
         repository = OutboxRepository(session)
         with session.begin():
             claimed_event = repository.claim_due_events(
@@ -33,19 +33,19 @@ def test_stale_publish_result_cannot_overwrite_a_reclaimed_outbox_event(
             )[0]
 
     replacement_token = uuid4()
-    with step2_session_factory() as session:
+    with session_factory() as session:
         with session.begin():
             current_event = session.get(ImportDispatchOutbox, event.id)
             assert current_event is not None
             current_event.claim_token = replacement_token
             current_event.claimed_at = datetime.now(UTC)
 
-    with step2_session_factory() as session:
+    with session_factory() as session:
         repository = OutboxRepository(session)
         with session.begin():
             assert not repository.mark_published(claimed_event=claimed_event)
 
-    with step2_session_factory() as session:
+    with session_factory() as session:
         current_event = session.scalar(
             select(ImportDispatchOutbox).where(ImportDispatchOutbox.id == event.id)
         )

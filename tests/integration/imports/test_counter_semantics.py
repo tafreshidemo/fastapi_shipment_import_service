@@ -10,7 +10,7 @@ from tests.support.imports import create_import_job, write_workbook
 
 
 def test_import_counters_follow_the_declared_row_equations(
-    step2_session_factory,
+    session_factory,
     tmp_path,
 ) -> None:
     workbook_path = tmp_path / "imports.xlsx"
@@ -24,7 +24,7 @@ def test_import_counters_follow_the_declared_row_equations(
             ["SHP-EXISTS", "Other", "Rome", "Paris", 1, 10, "DELIVERED", None],
         ],
     )
-    with step2_session_factory() as session:
+    with session_factory() as session:
         existing_job = create_import_job(session, workbook_path=workbook_path)
         target_job = create_import_job(session, workbook_path=workbook_path)
         session.add(
@@ -42,12 +42,12 @@ def test_import_counters_follow_the_declared_row_equations(
         session.commit()
 
     ProcessImportService(
-        session_factory=step2_session_factory,
+        session_factory=session_factory,
         settings=Settings(processing_row_chunk_size=2),
         worker_id="worker-a",
     ).run(target_job.id)
 
-    with step2_session_factory() as session:
+    with session_factory() as session:
         current_job = session.get(ImportJob, target_job.id)
 
     assert current_job is not None

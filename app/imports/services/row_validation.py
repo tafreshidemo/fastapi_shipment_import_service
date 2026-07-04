@@ -91,7 +91,7 @@ class _PreparedRow:
     shipment_code: str | None
 
 
-# Refinement made: Step 4 stable shipment rules live in the domain;
+# Refinement made: stable shipment rules live in the domain;
 # this service only orchestrates parsing, duplicate checks, and row mapping.
 class RowValidationService:
     def __init__(
@@ -108,9 +108,9 @@ class RowValidationService:
             yield self.validate_chunk(chunk, tracker, import_id=import_id)
 
     def validate(self, *, import_id: UUID) -> ValidationResult:
-        """Collect all chunks for focused Step 4 tests and small callers only.
+        """Collect all chunks for focused tests and small callers only.
 
-        Worker processing must use iter_validated_chunks() so Step 5 can persist each
+        Worker processing must use iter_validated_chunks() so can persist each
         chunk without holding the complete workbook result in memory.
         """
         accumulator = ValidationAccumulator()

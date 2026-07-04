@@ -10,10 +10,10 @@ from tests.integration.api._query_support import add_import, add_shipment, build
 
 @pytest.mark.asyncio
 async def test_shipments_filter_paginate_and_order_deterministically(
-    step2_session_factory,
+    session_factory,
 ) -> None:
     now = datetime.now(UTC).replace(microsecond=0)
-    with step2_session_factory() as session:
+    with session_factory() as session:
         first_import = add_import(session)
         second_import = add_import(session)
         add_shipment(
@@ -48,7 +48,7 @@ async def test_shipments_filter_paginate_and_order_deterministically(
         )
         session.commit()
 
-    app = build_query_app(step2_session_factory)
+    app = build_query_app(session_factory)
     target_date = (now - timedelta(days=1)).date().isoformat()
     async with AsyncClient(
         transport=ASGITransport(app=app),
