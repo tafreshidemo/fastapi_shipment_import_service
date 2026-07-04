@@ -430,14 +430,16 @@ def test_duplicate_lookup_with_empty_input_does_not_query_database(
         session.close()
 
 
-def test_no_future_repository_modules_exist() -> None:
+def test_step5_keeps_only_allowed_repository_modules() -> None:
     project_root = Path(__file__).resolve().parents[3]
 
-    future_modules = [
-        (project_root / "app" / "imports" / "repositories" / "import_claim_repository.py"),
-        (project_root / "app" / "imports" / "repositories" / "import_progress_repository.py"),
-        (project_root / "app" / "outbox" / "repositories" / "outbox_repository.py"),
-        (project_root / "app" / "imports" / "repositories" / "import_job_repository.py"),
+    allowed_step5_modules = [
+        project_root / "app" / "imports" / "repositories" / "import_claim_repository.py",
+        project_root / "app" / "imports" / "repositories" / "import_progress_repository.py",
+    ]
+    forbidden_modules = [
+        project_root / "app" / "outbox" / "repositories" / "outbox_repository.py",
+        project_root / "app" / "imports" / "repositories" / "import_job_repository.py",
         (
             project_root
             / "app"
@@ -447,4 +449,5 @@ def test_no_future_repository_modules_exist() -> None:
         ),
     ]
 
-    assert all(not module_path.exists() for module_path in future_modules)
+    assert all(module_path.exists() for module_path in allowed_step5_modules)
+    assert all(not module_path.exists() for module_path in forbidden_modules)

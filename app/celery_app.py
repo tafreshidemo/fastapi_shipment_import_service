@@ -10,7 +10,11 @@ settings = get_settings()
 import_exchange = Exchange("imports", type="direct")
 dlx_exchange = Exchange("imports.dlx", type="direct")
 
-celery_app = Celery("shipment_imports", broker=settings.rabbitmq_url, include=[])
+celery_app = Celery(
+    "shipment_imports",
+    broker=settings.rabbitmq_url,
+    include=["app.workers.tasks"],
+)
 celery_app.conf.update(
     task_default_queue="imports.dispatch",
     task_default_exchange=import_exchange.name,

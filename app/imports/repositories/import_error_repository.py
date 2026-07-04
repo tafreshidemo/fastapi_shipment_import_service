@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 from collections.abc import Sequence
+from uuid import UUID
+from sqlalchemy import delete
 from sqlalchemy.orm import Session
 
 from app.db.models.import_error import ImportError as ImportErrorRow
@@ -20,4 +22,10 @@ class ImportErrorRepository:
         self._session.add_all(rows)
         self._session.flush()
         return len(rows)
+
+    def delete_by_import_id(self, import_id: UUID) -> int:
+        result = self._session.execute(
+            delete(ImportErrorRow).where(ImportErrorRow.import_id == import_id)
+        )
+        return result.rowcount or 0
 

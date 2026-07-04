@@ -17,8 +17,8 @@ from app.domain.shipment_rules import (
     validate_partial_shipment_draft,
     validate_shipment_draft,
 )
-from app.imports.parsers.workbook_contract import REQUIRED_WORKBOOK_HEADERS
 from app.imports.jsonb import jsonb_safe
+from app.imports.parsers.workbook_contract import REQUIRED_WORKBOOK_HEADERS
 from app.imports.parsers.xlsx_parser import ParsedWorkbookRow, XlsxParser
 from app.imports.repositories.shipment_repository import ShipmentRepository
 from app.imports.schemas.shipment_row import ShipmentRow
@@ -30,6 +30,13 @@ _DATE_ADAPTER = TypeAdapter(date)
 
 
 @dataclass(frozen=True, slots=True)
+class ValidatedShipmentRow:
+    shipment: Shipment
+    row_number: int
+    raw_data: dict[str, object | None]
+
+
+@dataclass(frozen=True, slots=True)
 class ValidationChunkResult:
     total_rows: int
     processed_rows: int
@@ -37,6 +44,7 @@ class ValidationChunkResult:
     failed_count: int
     shipments: list[Shipment]
     import_errors: list[ImportErrorRow]
+    valid_rows: list[ValidatedShipmentRow]
 
 
 @dataclass(frozen=True, slots=True)
@@ -75,6 +83,14 @@ class ValidationAccumulator:
         )
 
 
+@dataclass(frozen=True, slots=True)
+class _PreparedRow:
+    row: ParsedWorkbookRow
+    issues: tuple[ValidationIssue, ...]
+    parsed_row: ShipmentRow | None
+    shipment_code: str | None
+
+
 class RowValidationService:
     def __init__(
         self,
@@ -87,7 +103,7 @@ class RowValidationService:
     def iter_validated_chunks(self, *, import_id: UUID) -> Iterator[ValidationChunkResult]:
         tracker = DuplicateTracker()
         for chunk in self._parser.iter_chunks():
-            yield self._validate_chunk(chunk, tracker, import_id=import_id)
+            yield self.validate_chunk(chunk, tracker, import_id=import_id)
 
     def validate(self, *, import_id: UUID) -> ValidationResult:
         """Collect all chunks for focused Step 4 tests and small callers only.
@@ -100,37 +116,33 @@ class RowValidationService:
             accumulator.add_chunk(chunk_result)
         return accumulator.to_result()
 
-    def _validate_chunk(
+    def validate_chunk(
         self,
         chunk: list[ParsedWorkbookRow],
         tracker: DuplicateTracker,
         *,
         import_id: UUID,
     ) -> ValidationChunkResult:
+        """Validate one parsed chunk without accumulating the workbook."""
+        prepared_rows = [self._prepare_row(row) for row in chunk]
+        chunk_codes = {
+            prepared_row.shipment_code
+            for prepared_row in prepared_rows
+            if prepared_row.shipment_code is not None
+        }
+        existing_db_codes = self._shipment_repository.find_existing_shipment_codes(
+            tracker.unseen_codes(chunk_codes)
+        )
+
         shipments: list[Shipment] = []
         import_errors: list[ImportErrorRow] = []
-        success_count = 0
+        valid_rows: list[ValidatedShipmentRow] = []
+        chunk_seen_codes: set[str] = set()
         failed_count = 0
 
-        chunk_codes = {
-            row.values["shipment_code"]
-            for row in chunk
-            if isinstance(row.values.get("shipment_code"), str)
-        }
-        unseen_codes = tracker.unseen_codes(chunk_codes)
-        existing_db_codes = self._shipment_repository.find_existing_shipment_codes(unseen_codes)
-
-        chunk_seen_codes: set[str] = set()
-
-        for row in chunk:
-            parsed_errors, parsed_values, parsed_row = self._parse_row(row)
-            row_issues = list(parsed_errors)
-            shipment_code = (
-                parsed_row.shipment_code
-                if parsed_row is not None
-                else self._parsed_shipment_code(parsed_values)
-            )
-
+        for prepared_row in prepared_rows:
+            row_issues = list(prepared_row.issues)
+            shipment_code = prepared_row.shipment_code
             if shipment_code is not None:
                 if (
                     shipment_code in tracker.seen_shipment_codes
@@ -156,31 +168,37 @@ class RowValidationService:
                 import_errors.extend(
                     self._build_import_errors(
                         import_id=import_id,
-                        row_number=row.row_number,
-                        raw_data=row.values,
+                        row_number=prepared_row.row.row_number,
+                        raw_data=prepared_row.row.values,
                         issues=row_issues,
                     )
                 )
                 continue
 
-            assert parsed_row is not None
-            shipments.append(
-                Shipment(
-                    id=uuid4(),
-                    import_id=import_id,
-                    shipment_code=parsed_row.shipment_code,
-                    customer_name=parsed_row.customer_name,
-                    origin_city=parsed_row.origin_city,
-                    destination_city=parsed_row.destination_city,
-                    weight_kg=parsed_row.weight_kg,
-                    price=parsed_row.price,
-                    status=parsed_row.status,
-                    delivery_date=parsed_row.delivery_date,
+            assert prepared_row.parsed_row is not None
+            shipment = Shipment(
+                id=uuid4(),
+                import_id=import_id,
+                shipment_code=prepared_row.parsed_row.shipment_code,
+                customer_name=prepared_row.parsed_row.customer_name,
+                origin_city=prepared_row.parsed_row.origin_city,
+                destination_city=prepared_row.parsed_row.destination_city,
+                weight_kg=prepared_row.parsed_row.weight_kg,
+                price=prepared_row.parsed_row.price,
+                status=prepared_row.parsed_row.status,
+                delivery_date=prepared_row.parsed_row.delivery_date,
+            )
+            shipments.append(shipment)
+            valid_rows.append(
+                ValidatedShipmentRow(
+                    shipment=shipment,
+                    row_number=prepared_row.row.row_number,
+                    raw_data=dict(prepared_row.row.values),
                 )
             )
-            success_count += 1
 
         tracker.remember_codes(chunk_seen_codes)
+        success_count = len(shipments)
         return ValidationChunkResult(
             total_rows=len(chunk),
             processed_rows=success_count + failed_count,
@@ -188,6 +206,68 @@ class RowValidationService:
             failed_count=failed_count,
             shipments=shipments,
             import_errors=import_errors,
+            valid_rows=valid_rows,
+        )
+
+    def reclassify_database_duplicates(
+        self,
+        *,
+        import_id: UUID,
+        chunk_result: ValidationChunkResult,
+    ) -> ValidationChunkResult:
+        """Turn concurrent global-code conflicts into row-level validation errors."""
+        existing_codes = self._shipment_repository.find_existing_shipment_codes(
+            {valid_row.shipment.shipment_code for valid_row in chunk_result.valid_rows}
+        )
+        if not existing_codes:
+            return chunk_result
+
+        retained_rows: list[ValidatedShipmentRow] = []
+        import_errors = list(chunk_result.import_errors)
+        for valid_row in chunk_result.valid_rows:
+            if valid_row.shipment.shipment_code not in existing_codes:
+                retained_rows.append(valid_row)
+                continue
+            import_errors.extend(
+                self._build_import_errors(
+                    import_id=import_id,
+                    row_number=valid_row.row_number,
+                    raw_data=valid_row.raw_data,
+                    issues=[
+                        ValidationIssue(
+                            field="shipment_code",
+                            error="Shipment code already exists in the database.",
+                        )
+                    ],
+                )
+            )
+
+        success_count = len(retained_rows)
+        failed_count = chunk_result.failed_count + (
+            len(chunk_result.valid_rows) - success_count
+        )
+        return ValidationChunkResult(
+            total_rows=chunk_result.total_rows,
+            processed_rows=chunk_result.processed_rows,
+            success_count=success_count,
+            failed_count=failed_count,
+            shipments=[valid_row.shipment for valid_row in retained_rows],
+            import_errors=import_errors,
+            valid_rows=retained_rows,
+        )
+
+    def _prepare_row(self, row: ParsedWorkbookRow) -> _PreparedRow:
+        parsed_errors, parsed_values, parsed_row = self._parse_row(row)
+        shipment_code = (
+            parsed_row.shipment_code
+            if parsed_row is not None
+            else self._parsed_shipment_code(parsed_values)
+        )
+        return _PreparedRow(
+            row=row,
+            issues=tuple(parsed_errors),
+            parsed_row=parsed_row,
+            shipment_code=shipment_code,
         )
 
     def _parse_row(
@@ -277,13 +357,16 @@ class RowValidationService:
     def _parsed_shipment_code(self, parsed_values: dict[str, object]) -> str | None:
         return self._optional_str(parsed_values.get("shipment_code"))
 
-    def _optional_str(self, value: object) -> str | None:
+    @staticmethod
+    def _optional_str(value: object) -> str | None:
         return value if isinstance(value, str) else None
 
-    def _optional_decimal(self, value: object) -> Decimal | None:
+    @staticmethod
+    def _optional_decimal(value: object) -> Decimal | None:
         return value if isinstance(value, Decimal) else None
 
-    def _optional_date(self, value: object) -> date | None:
+    @staticmethod
+    def _optional_date(value: object) -> date | None:
         return value if isinstance(value, date) else None
 
     def _build_import_errors(
@@ -306,4 +389,3 @@ class RowValidationService:
             )
             for issue in issues
         ]
-

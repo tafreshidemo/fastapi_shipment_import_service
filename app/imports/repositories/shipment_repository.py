@@ -1,8 +1,9 @@
 from __future__ import annotations
 
 from collections.abc import Sequence
+from uuid import UUID
 
-from sqlalchemy import select
+from sqlalchemy import delete, select
 from sqlalchemy.orm import Session
 
 from app.db.models.shipment import Shipment
@@ -26,3 +27,7 @@ class ShipmentRepository:
         statement = select(Shipment.shipment_code).where(Shipment.shipment_code.in_(codes))
         result = self._session.execute(statement)
         return set(result.scalars())
+
+    def delete_by_import_id(self, import_id: UUID) -> int:
+        result = self._session.execute(delete(Shipment).where(Shipment.import_id == import_id))
+        return result.rowcount or 0
