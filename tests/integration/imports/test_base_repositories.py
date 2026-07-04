@@ -430,15 +430,11 @@ def test_duplicate_lookup_with_empty_input_does_not_query_database(
         session.close()
 
 
-def test_step5_keeps_only_allowed_repository_modules() -> None:
+def test_no_future_repository_modules_exist() -> None:
+    """Step 6 keeps only the repositories declared through the active WBS step."""
     project_root = Path(__file__).resolve().parents[3]
 
-    allowed_step5_modules = [
-        project_root / "app" / "imports" / "repositories" / "import_claim_repository.py",
-        project_root / "app" / "imports" / "repositories" / "import_progress_repository.py",
-    ]
     forbidden_modules = [
-        project_root / "app" / "outbox" / "repositories" / "outbox_repository.py",
         project_root / "app" / "imports" / "repositories" / "import_job_repository.py",
         (
             project_root
@@ -447,7 +443,36 @@ def test_step5_keeps_only_allowed_repository_modules() -> None:
             / "repositories"
             / "import_dispatch_outbox_repository.py"
         ),
+        project_root / "app" / "imports" / "repositories" / "import_recovery_repository.py",
+        project_root / "app" / "outbox" / "repositories" / "outbox_recovery_repository.py",
+        project_root / "app" / "outbox" / "repositories" / "event_repository.py",
     ]
 
-    assert all(module_path.exists() for module_path in allowed_step5_modules)
-    assert all(not module_path.exists() for module_path in forbidden_modules)
+    assert all(
+        not module_path.exists() for module_path in forbidden_modules
+    ), "Unexpected repository module crosses the Step 6 WBS boundary."
+
+
+def test_step6_keeps_only_allowed_repository_modules() -> None:
+    """The canonical Step 5 and Step 6 repository modules are present."""
+    project_root = Path(__file__).resolve().parents[3]
+
+    import_repository_names = {
+        path.name
+        for path in (project_root / "app" / "imports" / "repositories").glob("*.py")
+        if path.name != "__init__.py"
+    }
+    outbox_repository_names = {
+        path.name
+        for path in (project_root / "app" / "outbox" / "repositories").glob("*.py")
+        if path.name != "__init__.py"
+    }
+
+    assert import_repository_names == {
+        "import_claim_repository.py",
+        "import_error_repository.py",
+        "import_progress_repository.py",
+        "import_repository.py",
+        "shipment_repository.py",
+    }
+    assert outbox_repository_names == {"outbox_repository.py"}

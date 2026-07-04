@@ -2,9 +2,11 @@ from __future__ import annotations
 
 from datetime import date, datetime
 from decimal import Decimal
+from typing import cast
 from uuid import uuid4
 
-from app.imports.parsers.xlsx_parser import ParsedWorkbookRow
+from app.imports.parsers.xlsx_parser import ParsedWorkbookRow, XlsxParser
+from app.imports.repositories.shipment_repository import ShipmentRepository
 from app.imports.services.row_validation import RowValidationService
 
 
@@ -97,7 +99,10 @@ def test_row_validation_counts_rows_errors_and_duplicates_across_chunks() -> Non
         ]
     )
     shipment_repository = FakeShipmentRepository(existing_codes={"SHP-3"})
-    service = RowValidationService(parser, shipment_repository)  # type: ignore[arg-type]
+    service = RowValidationService(
+        cast(XlsxParser, parser),
+        cast(ShipmentRepository, shipment_repository),
+    )
 
     result = service.validate(import_id=import_id)
 
@@ -145,7 +150,10 @@ def test_row_validation_preserves_sanitized_raw_data_and_multiple_errors() -> No
         ]
     )
     shipment_repository = FakeShipmentRepository(existing_codes=set())
-    service = RowValidationService(parser, shipment_repository)  # type: ignore[arg-type]
+    service = RowValidationService(
+        cast(XlsxParser, parser),
+        cast(ShipmentRepository, shipment_repository),
+    )
 
     result = service.validate(import_id=uuid4())
 
@@ -178,7 +186,10 @@ def test_row_validation_converts_raw_data_to_jsonb_safe_primitives() -> None:
         ]
     )
     shipment_repository = FakeShipmentRepository(existing_codes=set())
-    service = RowValidationService(parser, shipment_repository)  # type: ignore[arg-type]
+    service = RowValidationService(
+        cast(XlsxParser, parser),
+        cast(ShipmentRepository, shipment_repository),
+    )
 
     result = service.validate(import_id=uuid4())
 

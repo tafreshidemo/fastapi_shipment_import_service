@@ -4,11 +4,12 @@ from dataclasses import dataclass
 from datetime import datetime
 from uuid import UUID
 
-from sqlalchemy import select
+from sqlalchemy import func, select, update
 from sqlalchemy.orm import Session
 
 from app.db.models.import_dispatch_outbox import ImportDispatchOutbox
 from app.db.models.import_job import ImportJob
+from app.domain.import_states import ImportStatus
 
 
 @dataclass(frozen=True, slots=True)
@@ -58,3 +59,22 @@ class ImportRepository:
             created_at=created_at,
             idempotency_fingerprint=idempotency_fingerprint,
         )
+
+    def fail_pending_import_after_dispatch_exhausted(self, *, import_id: UUID, reason: str) -> bool:
+        """Fail an import only while dispatch remains the reason processing never started."""
+        result = self._session.execute(
+            update(ImportJob)
+            .where(
+                ImportJob.id == import_id,
+                ImportJob.status == ImportStatus.PENDING,
+            )
+            .values(
+                status=ImportStatus.FAILED,
+                failure_reason=reason,
+                last_failure_reason=reason,
+                finished_at=func.now(),
+                processing_token=None,
+                locked_by_worker=None,
+            )
+        )
+        return result.rowcount == 1

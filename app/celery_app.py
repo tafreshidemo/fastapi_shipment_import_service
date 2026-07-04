@@ -13,7 +13,11 @@ dlx_exchange = Exchange("imports.dlx", type="direct")
 celery_app = Celery(
     "shipment_imports",
     broker=settings.rabbitmq_url,
-    include=["app.workers.tasks"],
+    include=[
+        "app.workers.tasks",
+        "app.workers.startup_recovery",
+        "app.workers.beat_schedule",
+    ],
 )
 celery_app.conf.update(
     task_default_queue="imports.dispatch",
@@ -39,4 +43,10 @@ celery_app.conf.update(
     worker_prefetch_multiplier=settings.celery_worker_prefetch_multiplier,
     task_acks_late=settings.celery_task_acks_late,
     task_reject_on_worker_lost=settings.celery_task_reject_on_worker_lost,
+    beat_schedule={
+        "recover-stale-imports": {
+            "task": "imports.recover_stale_imports",
+            "schedule": settings.watchdog_interval_seconds,
+        },
+    },
 )

@@ -91,6 +91,8 @@ class _PreparedRow:
     shipment_code: str | None
 
 
+# Refinement made: Step 4 stable shipment rules live in the domain;
+# this service only orchestrates parsing, duplicate checks, and row mapping.
 class RowValidationService:
     def __init__(
         self,

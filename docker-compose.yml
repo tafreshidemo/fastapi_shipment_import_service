@@ -130,6 +130,52 @@ services:
     restart: unless-stopped
     stop_grace_period: 30s
 
+
+  outbox_publisher:
+    image: fastapi_technical_assessment-app
+    build:
+      context: .
+      dockerfile: Dockerfile
+    command: ["python", "-m", "app.outbox.services.publish_outbox"]
+    env_file:
+      - .env.example
+    environment:
+      DATABASE_URL: postgresql+psycopg://postgres:postgres@postgres:5432/import_service
+      RABBITMQ_URL: amqp://import_user:import_password@rabbitmq:5672//
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      rabbitmq:
+        condition: service_healthy
+    restart: unless-stopped
+    stop_grace_period: 30s
+
+  beat:
+    image: fastapi_technical_assessment-app
+    build:
+      context: .
+      dockerfile: Dockerfile
+    command:
+      [
+        "celery",
+        "-A",
+        "app.celery_app:celery_app",
+        "beat",
+        "--loglevel=INFO",
+      ]
+    env_file:
+      - .env.example
+    environment:
+      DATABASE_URL: postgresql+psycopg://postgres:postgres@postgres:5432/import_service
+      RABBITMQ_URL: amqp://import_user:import_password@rabbitmq:5672//
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      rabbitmq:
+        condition: service_healthy
+    restart: unless-stopped
+    stop_grace_period: 30s
+
 volumes:
   postgres_data:
   rabbitmq_data:

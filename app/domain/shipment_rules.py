@@ -6,6 +6,8 @@ from decimal import Decimal
 
 from app.domain.errors import ValidationIssue
 
+# Refinement made: Step 4 framework-independent shipment rules were
+# extracted from row validation after the parser contract stabilized.
 ALLOWED_SHIPMENT_STATUSES = frozenset(
     {
         "PENDING",
