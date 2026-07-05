@@ -62,8 +62,6 @@ Install Docker Engine and the Docker Compose plugin. No local PostgreSQL or Rabb
 ### Start the stack
 
 ```bash
-cd fastapi_technical_assessment
-
 docker compose up -d --build
 docker compose ps
 ```
@@ -105,8 +103,6 @@ docker compose down
 Docker is the simplest way to run the complete system. For a local Python setup, PostgreSQL and RabbitMQ must already be available.
 
 ```bash
-cd fastapi_technical_assessment
-
 python3.12 -m venv .venv
 source .venv/bin/activate
 python -m pip install --upgrade pip
